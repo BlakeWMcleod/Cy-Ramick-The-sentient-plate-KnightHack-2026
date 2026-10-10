@@ -49,31 +49,36 @@ BAT_L, BAT_W = 68.7, 64.2
 BAT_H = 19.0          # Body height
 BAT_SW_H = 22.5       # Height including the switch
 BAT_X, BAT_Y = 14.85, 0.0
-BAT_SW = (12.0, 8.0)  # Switch footprint, at the +X end of the cover
+BAT_ROT = 0           # 0: long side along X, 90: long side along Y
+BAT_SW = (12.0, 8.0)  # Switch footprint, near one end of the cover
 BAT_GUIDE_H = 6.0
 
 # ESP32 DevKit 30-pin
 ESP_L, ESP_W = 52.0, 28.5
 ESP_PCB = 1.6
 ESP_LEDGE_Z = 11.0    # Board underside above the floor
-ESP_WALL_GAP = 2.4    # USB end of the board to the wall's inner face
+ESP_Y = 0.0           # Board centreline; the USB end faces the -X wall
+ESP_WALL_GAP = 2.4    # USB connector to the wall's inner face
+ESP_LEDGE_W = 3.5     # Ledges under the two pin-free ends of the board
 ESP_PIN_LEN = 8.5     # Header pins below the board
 ESP_ROW_PITCH = 25.4
 ESP_PINS = 15
 ESP_USB = (8.0, 9.0, 3.2)  # Connector length, width, height
 USB_SLOT = (13.0, 7.5)     # Slot width, height through the left wall
 
-# GY-521 (MPU-6050), glued to the floor under the ESP32
+# GY-521 (MPU-6050), glued flat to the floor (any orientation; calibrated at boot)
 GY_L, GY_W, GY_H = 21.0, 16.0, 4.0
+GY_POS = None         # (x, y, degrees); None = under the ESP32 between its header rows
 
 # DFPlayer Mini
 DF_S, DF_H = 20.5, 6.0
-DF_WALL_GAP = 4.4     # DFPlayer outer edge to the wall's inner face
+DF_X, DF_Y = 61.75, 0.0
 DF_GUIDE_H = 4.0
 
 # Speaker (31 x 28 x 15 sealed box), face down on a hollow plenum
 SPK_L, SPK_W, SPK_H = 31.0, 28.0, 15.0
-SPK_Y = 50.0
+SPK_ANGLE = 90        # Direction from the centre to the speaker; vents face the same way
+SPK_DIST = 50.0       # Speaker centre from the tray centre
 PLENUM_H = 4.4        # Total plenum height above the floor
 PLENUM_TOP = 1.2      # Plenum roof thickness
 PLENUM_HALF_W = 18.0
@@ -118,8 +123,9 @@ RENDER_PREVIEWS = True
 
 R_IN = R - WALL
 LID_Z = TRAY_H
-ESP_X0 = -(R_IN - ESP_WALL_GAP)      # USB end of the board
-DF_X = R_IN - DF_WALL_GAP - DF_S / 2
+ESP_X0 = -min(math.sqrt(R_IN ** 2 - ESP_Y ** 2) - ESP_WALL_GAP,
+              math.sqrt(R_IN ** 2 - (abs(ESP_Y) + ESP_W / 2) ** 2) - 0.6)  # USB end of the board
+BAT_DX, BAT_DY = (BAT_L, BAT_W) if BAT_ROT == 0 else (BAT_W, BAT_L)
 IR_RADIUS = R_IN - IR_WALL_GAP
 ESP_XC = ESP_X0 + ESP_L / 2
 ESP_Z = FLOOR + ESP_LEDGE_Z          # Board underside
@@ -147,6 +153,11 @@ def obox(u0, u1, v0, v1, z0, z1, deg=0.0, origin=(0.0, 0.0)):
     """Box given in a frame rotated by deg (u along the angle, v across it)."""
     pts = [rot(u, v, deg) for u, v in ((u0, v0), (u1, v0), (u1, v1), (u0, v1))]
     return prism([(origin[0] + x, origin[1] + y) for x, y in pts], z0, z1)
+
+
+def rotate_part(part, deg):
+    verts, faces = part
+    return [(*rot(x, y, deg), z) for x, y, z in verts], faces
 
 
 def box(x0, x1, y0, y1, z0, z1):
@@ -310,42 +321,70 @@ def write_stl(path, tris, transform=None):
 
 # ============================================================== Component stand-ins
 
+def gy_box(z0, z1, margin=0.0):
+    if GY_POS is None:
+        x, y, deg = ESP_XC, ESP_Y, 0
+    else:
+        x, y, deg = GY_POS
+    return obox(-GY_L / 2 - margin, GY_L / 2 + margin, -GY_W / 2 - margin, GY_W / 2 + margin, z0, z1, deg, (x, y))
+
+
+def esp_ledges(z0, z1, margin=0.0):
+    ends = ((ESP_X0 - 0.6, ESP_X0 + ESP_LEDGE_W), (ESP_X0 + ESP_L - ESP_LEDGE_W, ESP_X0 + ESP_L))
+    return [box(xa - margin, xb + margin, ESP_Y - ESP_W / 2 - margin, ESP_Y + ESP_W / 2 + margin, z0, z1)
+            for xa, xb in ends]
+
+
+def plenum_parts(margin=0.0):
+    """Plenum solid, cavity, speaker hole and vents, built facing +Y then rotated into place."""
+    F = FLOOR
+    y0 = SPK_DIST - SPK_W / 2 - 2.0
+    w = PLENUM_HALF_W - 1.2
+    z_cav = F + PLENUM_H - PLENUM_TOP
+    solid = prism(rect_in_circle(-PLENUM_HALF_W - margin, PLENUM_HALF_W + margin, y0 - margin, R_IN + 5,
+                                 R_IN + 1.0 + margin), F - 0.5 if not margin else -2.0, F + PLENUM_H if not margin else F + 1.0)
+    cuts = [prism(rect_in_circle(-w, w, y0 + 1.2, R_IN + 5, R_IN - 0.3), F - 0.4, z_cav),
+            cyl(0, SPK_DIST, SPK_HOLE_D / 2, z_cav - 0.1, F + PLENUM_H + 0.1, 96)]
+    for i in range(VENT_N):
+        x = (i - (VENT_N - 1) / 2) * VENT_PITCH
+        cuts.append(box(x - VENT_W / 2, x + VENT_W / 2, R_IN - 2.0, R + 2, F - 0.4, z_cav - 0.4))
+    turn = SPK_ANGLE - 90
+    return rotate_part(solid, turn), [rotate_part(c, turn) for c in cuts]
+
+
 def components():
     """Return {name: (parts, colour)} for every component, in assembled position."""
     c = {}
     F = FLOOR
 
     # Battery holder, switch at the +X end of the cover
-    bx0, bx1 = BAT_X - BAT_L / 2, BAT_X + BAT_L / 2
-    by0, by1 = BAT_Y - BAT_W / 2, BAT_Y + BAT_W / 2
-    sw_x = bx1 - 6 - BAT_SW[0]
-    c["Battery holder"] = ([
-        box(bx0, bx1, by0, by1, F, F + BAT_H),
-        box(sw_x, sw_x + BAT_SW[0], BAT_Y - BAT_SW[1] / 2, BAT_Y + BAT_SW[1] / 2, F + BAT_H, F + BAT_SW_H),
-    ], (0.12, 0.12, 0.12))
+    bx0, bx1 = BAT_X - BAT_DX / 2, BAT_X + BAT_DX / 2
+    by0, by1 = BAT_Y - BAT_DY / 2, BAT_Y + BAT_DY / 2
+    sw = obox(BAT_L / 2 - 6 - BAT_SW[0], BAT_L / 2 - 6, -BAT_SW[1] / 2, BAT_SW[1] / 2,
+              F + BAT_H, F + BAT_SW_H, BAT_ROT, (BAT_X, BAT_Y))
+    c["Battery holder"] = ([box(bx0, bx1, by0, by1, F, F + BAT_H), sw], (0.12, 0.12, 0.12))
 
     # ESP32 on ledges, components up, header pins down
     x0, x1 = ESP_X0, ESP_X0 + ESP_L
     zb, zt = ESP_Z, ESP_Z + ESP_PCB
     pins_half = ESP_PINS * 2.54 / 2
     esp = [
-        box(x0, x1, -ESP_W / 2, ESP_W / 2, zb, zt),
-        box(x0 - 0.5, x0 - 0.5 + ESP_USB[0], -ESP_USB[1] / 2, ESP_USB[1] / 2, zt, zt + ESP_USB[2]),
-        box(x0 + 10, x1, -9, 9, zt, zt + 3.2),
+        box(x0, x1, ESP_Y - ESP_W / 2, ESP_Y + ESP_W / 2, zb, zt),
+        box(x0 - 0.5, x0 - 0.5 + ESP_USB[0], ESP_Y - ESP_USB[1] / 2, ESP_Y + ESP_USB[1] / 2, zt, zt + ESP_USB[2]),
+        box(x0 + 10, x1, ESP_Y - 9, ESP_Y + 9, zt, zt + 3.2),
     ]
     for ky in (-1, 1):
-        y = ky * ESP_ROW_PITCH / 2
+        y = ESP_Y + ky * ESP_ROW_PITCH / 2
         esp.append(box(ESP_XC - pins_half, ESP_XC + pins_half, y - 1.27, y + 1.27, zb - ESP_PIN_LEN, zb))
     c["ESP32 DevKit"] = (esp, (0.08, 0.22, 0.55))
 
-    c["GY-521"] = ([box(ESP_XC - GY_L / 2, ESP_XC + GY_L / 2, -GY_W / 2, GY_W / 2, F, F + GY_H)],
-                   (0.15, 0.4, 0.75))
+    c["GY-521"] = ([gy_box(F, F + GY_H)], (0.15, 0.4, 0.75))
 
-    c["DFPlayer Mini"] = ([box(DF_X - DF_S / 2, DF_X + DF_S / 2, -DF_S / 2, DF_S / 2, F, F + DF_H)],
+    c["DFPlayer Mini"] = ([box(DF_X - DF_S / 2, DF_X + DF_S / 2, DF_Y - DF_S / 2, DF_Y + DF_S / 2, F, F + DF_H)],
                           (0.1, 0.45, 0.25))
 
-    c["Speaker"] = ([box(-SPK_L / 2, SPK_L / 2, SPK_Y - SPK_W / 2, SPK_Y + SPK_W / 2,
-                         F + PLENUM_H, F + PLENUM_H + SPK_H)], (0.55, 0.1, 0.1))
+    c["Speaker"] = ([rotate_part(box(-SPK_L / 2, SPK_L / 2, SPK_DIST - SPK_W / 2, SPK_DIST + SPK_W / 2,
+                                     F + PLENUM_H, F + PLENUM_H + SPK_H), SPK_ANGLE - 90)], (0.55, 0.1, 0.1))
 
     # TCRT5000 modules: u = radial, v = along the module
     for i, (deg, pd) in enumerate(zip(IR_ANGLES, IR_PIN_DIR)):
@@ -383,16 +422,13 @@ def tray_adds():
     adds = []
 
     # ESP32 ledges under the two short ends of the board (clear of the header pins)
-    for xa, xb in ((ESP_X0 - 0.6, ESP_X0 + 5.0), (ESP_X0 + ESP_L - 5.0, ESP_X0 + ESP_L)):
-        adds.append(box(xa, xb, -ESP_W / 2, ESP_W / 2, F - 0.5, ESP_Z))
+    adds += esp_ledges(F - 0.5, ESP_Z)
 
-    adds += l_guides(BAT_X, BAT_Y, BAT_L, BAT_W, 10.0, BAT_GUIDE_H)
-    adds += l_guides(DF_X, 0.0, DF_S, DF_S, 6.0, DF_GUIDE_H)
+    adds += l_guides(BAT_X, BAT_Y, BAT_DX, BAT_DY, 10.0, BAT_GUIDE_H)
+    adds += l_guides(DF_X, DF_Y, DF_S, DF_S, 6.0, DF_GUIDE_H)
 
-    # Speaker plenum, clipped to run into the back wall
-    y0 = SPK_Y - SPK_W / 2 - 2.0
-    adds.append(prism(rect_in_circle(-PLENUM_HALF_W, PLENUM_HALF_W, y0, R_IN + 5, R_IN + 1.0),
-                      F - 0.5, F + PLENUM_H))
+    # Speaker plenum, running out into the wall
+    adds.append(plenum_parts()[0])
 
     # TCRT5000 side fences
     for deg in IR_ANGLES:
@@ -415,18 +451,12 @@ def tray_cuts():
 
     # USB-C slot in the left wall, centred on the connector
     zc = ESP_Z + ESP_PCB + ESP_USB[2] / 2
-    cuts.append(box(-R - 2, -(R_IN - 1), -USB_SLOT[0] / 2, USB_SLOT[0] / 2,
+    xw = math.sqrt(R_IN ** 2 - ESP_Y ** 2)
+    cuts.append(box(-R - 2, -(xw - 1), ESP_Y - USB_SLOT[0] / 2, ESP_Y + USB_SLOT[0] / 2,
                     zc - USB_SLOT[1] / 2, zc + USB_SLOT[1] / 2))
 
     # Plenum cavity, speaker hole and vent slots
-    y0 = SPK_Y - SPK_W / 2 - 2.0
-    w = PLENUM_HALF_W - 1.2
-    z_cav = F + PLENUM_H - PLENUM_TOP
-    cuts.append(prism(rect_in_circle(-w, w, y0 + 1.2, R_IN + 5, R_IN - 0.3), F - 0.4, z_cav))
-    cuts.append(cyl(0, SPK_Y, SPK_HOLE_D / 2, z_cav - 0.1, F + PLENUM_H + 0.1, 96))
-    for i in range(VENT_N):
-        x = (i - (VENT_N - 1) / 2) * VENT_PITCH
-        cuts.append(box(x - VENT_W / 2, x + VENT_W / 2, R_IN - 2.0, R + 2, F - 0.4, z_cav - 0.4))
+    cuts += plenum_parts()[1]
 
     # Floor windows under each IR sensor
     for deg, pd in zip(IR_ANGLES, IR_PIN_DIR):
@@ -444,7 +474,7 @@ def tray_cuts():
 
 def lid_window():
     m = 0.5
-    return box(BAT_X - BAT_L / 2 - m, BAT_X + BAT_L / 2 + m, BAT_Y - BAT_W / 2 - m, BAT_Y + BAT_W / 2 + m,
+    return box(BAT_X - BAT_DX / 2 - m, BAT_X + BAT_DX / 2 + m, BAT_Y - BAT_DY / 2 - m, BAT_Y + BAT_DY / 2 + m,
                LID_Z - 1, LID_Z + LID + 1)
 
 
@@ -465,14 +495,12 @@ def floor_keep_pads():
     m = FLOOR_PAD
     g = CLEAR + 1.2 + m   # Margin that also covers the corner guides
     pads = []
-    pads.append(box(BAT_X - BAT_L / 2 - g, BAT_X + BAT_L / 2 + g,
-                    BAT_Y - BAT_W / 2 - g, BAT_Y + BAT_W / 2 + g, z0, z1))
-    pads.append(box(DF_X - DF_S / 2 - g, DF_X + DF_S / 2 + g, -DF_S / 2 - g, DF_S / 2 + g, z0, z1))
-    for xa, xb in ((ESP_X0 - 0.6, ESP_X0 + 5.0), (ESP_X0 + ESP_L - 5.0, ESP_X0 + ESP_L)):
-        pads.append(box(xa - m, xb + m, -ESP_W / 2 - m, ESP_W / 2 + m, z0, z1))
-    pads.append(box(ESP_XC - GY_L / 2 - m, ESP_XC + GY_L / 2 + m, -GY_W / 2 - m, GY_W / 2 + m, z0, z1))
-    y0 = SPK_Y - SPK_W / 2 - 2.0
-    pads.append(prism(rect_in_circle(-PLENUM_HALF_W - m, PLENUM_HALF_W + m, y0 - m, R + 5, R + 1), z0, z1))
+    pads.append(box(BAT_X - BAT_DX / 2 - g, BAT_X + BAT_DX / 2 + g,
+                    BAT_Y - BAT_DY / 2 - g, BAT_Y + BAT_DY / 2 + g, z0, z1))
+    pads.append(box(DF_X - DF_S / 2 - g, DF_X + DF_S / 2 + g, DF_Y - DF_S / 2 - g, DF_Y + DF_S / 2 + g, z0, z1))
+    pads += esp_ledges(z0, z1, m)
+    pads.append(gy_box(z0, z1, m))
+    pads.append(plenum_parts(m)[0])
     for deg in IR_ANGLES:
         hu = IR_W / 2 + CLEAR + 1.2 + m
         pads.append(obox(IR_RADIUS - hu, IR_RADIUS + hu, -IR_L / 2 - m, IR_L / 2 + m, z0, z1, deg))
@@ -492,7 +520,7 @@ def floor_cutter(tmp_collection):
     cutter = make_object("floor_cutter", [cyl(0, 0, R_IN - FLOOR_RIM, -1, FLOOR + 0.05)], tmp_collection)
     apply_boolean(cutter, floor_keep_pads(), "DIFFERENCE", tmp_collection)
     s = BAT_SEAT
-    seat = box(BAT_X - BAT_L / 2 + s, BAT_X + BAT_L / 2 - s, BAT_Y - BAT_W / 2 + s, BAT_Y + BAT_W / 2 - s,
+    seat = box(BAT_X - BAT_DX / 2 + s, BAT_X + BAT_DX / 2 - s, BAT_Y - BAT_DY / 2 + s, BAT_Y + BAT_DY / 2 - s,
                -1, FLOOR + 0.05)
     apply_boolean(cutter, [seat], "UNION", tmp_collection)
     mesh = cutter.data
