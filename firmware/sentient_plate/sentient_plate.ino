@@ -30,6 +30,12 @@
  * as its "sees the table" level, so neither the GY-521 mounting direction nor
  * the TCRT5000 output polarity needs to be known in advance.
  *
+ * Buttons (to GND, internal pull-ups):
+ *   Button 1 (GPIO18)  Wait for lift: fades to silence and stays quiet until the
+ *                      plate is set on the table and then lifted off it. Press
+ *                      again to cancel.
+ *   Button 2 (GPIO19)  Mute on/off.
+ *
  * Required library: "DFRobotDFPlayerMini" (Arduino Library Manager).
  */
 
@@ -50,6 +56,10 @@ const int NUM_IR      = sizeof(IR_PINS) / sizeof(IR_PINS[0]);
 // the table) is taken as "sees the table". Set it false to use IR_SURFACE_LEVEL.
 const bool IR_AUTO_POLARITY = true;
 const int  IR_SURFACE_LEVEL = LOW;
+
+const int PIN_BTN_LIFT = 18;          // Button 1: wait for lift
+const int PIN_BTN_MUTE = 19;          // Button 2: mute
+const uint16_t DEBOUNCE_MS = 30;
 
 // ---------------------------------------------------------------- Audio
 const uint8_t  VOLUME         = 18;   // 0-30. Higher volume draws current spikes through D2.
@@ -91,8 +101,22 @@ uint8_t  candidateFolder = FOLDER_FLAT;
 uint32_t candidateSince = 0;
 uint8_t  targetFolder = FOLDER_FLAT;
 
+// Button-controlled silence
+struct Button {
+  int pin;
+  int stableLevel;
+  int lastRaw;
+  uint32_t changedAt;
+};
+Button btnLift = {PIN_BTN_LIFT, HIGH, HIGH, 0};
+Button btnMute = {PIN_BTN_MUTE, HIGH, HIGH, 0};
+bool muted = false;
+bool waitingForLift = false;
+bool liftSawTable = false;            // The plate must be seen on the table before a lift counts
+uint32_t offTableSince = 0;
+
 // Audio state machine
-enum AudioState { PLAYING, FADING_OUT, FADING_IN };
+enum AudioState { PLAYING, FADING_OUT, FADING_IN, SILENT };
 AudioState audioState = PLAYING;
 uint8_t  playingFolder = 0;
 uint8_t  currentVolume = 0;
@@ -274,10 +298,11 @@ bool trackFinished() {
 
 void updateAudio() {
   uint32_t now = millis();
+  bool silent = muted || waitingForLift;
 
   switch (audioState) {
     case PLAYING:
-      if (targetFolder != playingFolder && now - trackStartedAt >= MIN_PLAY_MS) {
+      if (silent || (targetFolder != playingFolder && now - trackStartedAt >= MIN_PLAY_MS)) {
         audioState = FADING_OUT;
         lastFadeStep = now;
       } else if (trackFinished()) {
@@ -291,6 +316,9 @@ void updateAudio() {
         lastFadeStep = now;
         if (currentVolume > 0) {
           setVolume(currentVolume - 1);
+        } else if (silent) {
+          player.stop();
+          audioState = SILENT;
         } else {
           startTrack(targetFolder);
           audioState = FADING_IN;
@@ -299,13 +327,24 @@ void updateAudio() {
       break;
 
     case FADING_IN:
-      if (now - lastFadeStep >= FADE_STEP_MS) {
+      if (silent) {
+        audioState = FADING_OUT;  // Fade back down from wherever the fade-in reached
+      } else if (now - lastFadeStep >= FADE_STEP_MS) {
         lastFadeStep = now;
         if (currentVolume < VOLUME) {
           setVolume(currentVolume + 1);
         } else {
           audioState = PLAYING;
         }
+      }
+      break;
+
+    case SILENT:
+      while (player.available()) player.readType();  // Discard stale DFPlayer messages
+      if (!silent) {
+        startTrack(targetFolder);
+        audioState = FADING_IN;
+        lastFadeStep = now;
       }
       break;
   }
@@ -321,11 +360,59 @@ void loadTrackCounts() {
   }
 }
 
+// ================================================================ Buttons
+
+// Returns true once per press (debounced HIGH -> LOW transition).
+bool pressed(Button &b) {
+  int raw = digitalRead(b.pin);
+  uint32_t now = millis();
+  if (raw != b.lastRaw) {
+    b.lastRaw = raw;
+    b.changedAt = now;
+  }
+  if (raw != b.stableLevel && now - b.changedAt >= DEBOUNCE_MS) {
+    b.stableLevel = raw;
+    return raw == LOW;
+  }
+  return false;
+}
+
+void updateButtons() {
+  if (pressed(btnLift)) {
+    waitingForLift = !waitingForLift;
+    liftSawTable = false;
+    offTableSince = 0;
+    Serial.println(waitingForLift ? "Waiting for lift" : "Wait for lift cancelled");
+  }
+  if (pressed(btnMute)) {
+    muted = !muted;
+    Serial.println(muted ? "Muted" : "Unmuted");
+  }
+}
+
+// Clears "wait for lift" once the plate has been on the table and then leaves it.
+void updateLiftWait() {
+  if (!waitingForLift) return;
+  uint32_t now = millis();
+  if (irOnTable > 0) {
+    liftSawTable = true;
+    offTableSince = 0;
+  } else if (liftSawTable) {
+    if (offTableSince == 0) offTableSince = now;
+    if (now - offTableSince >= SETTLE_MS) {
+      waitingForLift = false;
+      Serial.println("Lifted");
+    }
+  }
+}
+
 // ================================================================ Main
 
 void setup() {
   Serial.begin(115200);
   if (PIN_DF_BUSY >= 0) pinMode(PIN_DF_BUSY, INPUT_PULLUP);
+  pinMode(PIN_BTN_LIFT, INPUT_PULLUP);
+  pinMode(PIN_BTN_MUTE, INPUT_PULLUP);
   randomSeed(esp_random());
 
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
@@ -357,13 +444,16 @@ void loop() {
     lastSample = now;
     updateSensors();
     updateTarget();
+    updateLiftWait();
   }
 
+  updateButtons();
   updateAudio();
 
   if (now - lastLog >= 250) {
     lastLog = now;
-    Serial.printf("tilt=%6.1f band=%d irOnTable=%d/%d target=%02u playing=%02u vol=%u\n",
-                  tiltDeg, tiltBand, irOnTable, NUM_IR, targetFolder, playingFolder, currentVolume);
+    Serial.printf("tilt=%6.1f band=%d irOnTable=%d/%d target=%02u playing=%02u vol=%u%s%s\n",
+                  tiltDeg, tiltBand, irOnTable, NUM_IR, targetFolder, playingFolder, currentVolume,
+                  muted ? " MUTED" : "", waitingForLift ? " WAITING" : "");
   }
 }

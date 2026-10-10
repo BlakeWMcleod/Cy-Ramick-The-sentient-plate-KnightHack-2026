@@ -14,10 +14,17 @@ The plate talks continuously. Each clip is chosen from the SD-card folder that m
 | DFPlayer Mini BUSY (pin 16) | GPIO 4 |
 | GY-521 (MPU-6050) SDA / SCL | GPIO 21 / GPIO 22 |
 | TCRT5000 sensors 1–5, DO | GPIO 32, 33, 25, 26, 27 |
+| Button 1 (wait for lift), other leg to GND | GPIO 18 |
+| Button 2 (mute), other leg to GND | GPIO 19 |
 
 The five TCRT5000 sensors face down at the table from the rim of the enclosure. When all of them see the table, the plate is resting. When none of them do, it has been lifted. When only some do, it is hanging over the edge of the table.
 
 Switch the plate on while it rests flat on the table. At boot, the firmware records that orientation as "flat" and reads each IR sensor's output level as its "sees the table" level, so the sensor polarity does not need to be known in advance.
+
+### Buttons
+
+- **Button 1 – wait for lift:** fades the plate to silence. It stays quiet until it has been set on the table and then lifted off it, at which point it starts talking again. Press again to cancel.
+- **Button 2 – mute:** toggles mute. Unmuting fades a new clip in.
 
 ### SD card layout
 
