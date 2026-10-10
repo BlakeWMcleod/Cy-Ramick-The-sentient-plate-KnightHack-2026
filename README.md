@@ -9,20 +9,22 @@ The plate talks continuously. Each clip is chosen from the SD-card folder that m
 
 | Part | ESP32 pin |
 | --- | --- |
-| MPU6050 SDA / SCL | GPIO 21 / GPIO 22 |
-| DFPlayer Mini TX → ESP32 RX2 | GPIO 16 |
-| DFPlayer Mini RX ← ESP32 TX2 (via 1 kΩ resistor) | GPIO 17 |
-| DFPlayer Mini BUSY | GPIO 4 |
-| IR cliff sensor (e.g. TCRT5000) digital out | GPIO 27 |
+| DFPlayer Mini RX (pin 2) | GPIO 17 (TX2) |
+| DFPlayer Mini TX (pin 3) | GPIO 16 (RX2) |
+| DFPlayer Mini BUSY (pin 16) | GPIO 4 |
+| GY-521 (MPU-6050) SDA / SCL | GPIO 21 / GPIO 22 |
+| TCRT5000 sensors 1–5, DO | GPIO 32, 33, 25, 26, 27 |
 
-Mount the cliff sensor facing down near the rim of the plate so that it loses sight of the table when the plate overhangs an edge. Power the plate on while it lies flat; the boot orientation is used as the "flat" reference.
+The five TCRT5000 sensors face down at the table from the rim of the enclosure. When all of them see the table, the plate is resting. When none of them do, it has been lifted. When only some do, it is hanging over the edge of the table.
+
+Switch the plate on while it rests flat on the table. At boot, the firmware records that orientation as "flat" and reads each IR sensor's output level as its "sees the table" level, so the sensor polarity does not need to be known in advance.
 
 ### SD card layout
 
 | Folder | Situation |
 | --- | --- |
 | `01` | On the edge of a table |
-| `02` | Flat (held level or resting) |
+| `02` | Flat (resting on the table, or lifted and held level) |
 | `03` – `10` | Tilted 15–35°, 35–55°, 55–75°, 75–95°, 95–115°, 115–140°, 140–165°, 165–180° |
 
-Name the files `001.mp3`, `002.mp3`, … inside each folder. Install the **DFRobotDFPlayerMini** library from the Arduino Library Manager before compiling.
+Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … inside each numbered folder (not the `/mp3` folder), and copy them in order. Install the **DFRobotDFPlayerMini** library from the Arduino Library Manager before compiling.
