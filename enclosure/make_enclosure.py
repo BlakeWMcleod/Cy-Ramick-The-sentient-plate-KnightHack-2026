@@ -33,7 +33,7 @@ OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 # ============================================================== Parameters
 
 # Shell
-R = 78.0              # Outer radius (156 mm across)
+R = 79.0              # Outer radius (158 mm across)
 WALL = 1.6            # 4 perimeters with a 0.4 mm nozzle
 FLOOR = 1.6           # Also sets the IR sensors' height above the table
 LID = 1.2
@@ -68,7 +68,7 @@ GY_L, GY_W, GY_H = 21.0, 16.0, 4.0
 
 # DFPlayer Mini
 DF_S, DF_H = 20.5, 6.0
-DF_X = 61.75
+DF_WALL_GAP = 4.4     # DFPlayer outer edge to the wall's inner face
 DF_GUIDE_H = 4.0
 
 # Speaker (31 x 28 x 15 sealed box), face down on a hollow plenum
@@ -84,7 +84,7 @@ VENT_N, VENT_W, VENT_PITCH = 5, 3.0, 6.0
 IR_L, IR_W, IR_PCB = 35.0, 10.0, 1.6
 IR_BODY_H = 7.0       # Sensor body height (sets the PCB height above the floor)
 IR_SENSOR_U = 3.5     # Sensor centre from the sensor end of the module
-IR_RADIUS = 67.0      # Module centreline distance from the tray centre
+IR_WALL_GAP = 9.4     # Module centreline to the wall's inner face
 IR_ANGLES = [50, 135, 215, 270, 320]  # Degrees, counter-clockwise from +X
 IR_PIN_DIR = [-1, -1, 1, 1, -1]       # Which end the header pins leave from
 IR_PIN_LEN = 6.0
@@ -119,6 +119,8 @@ RENDER_PREVIEWS = True
 R_IN = R - WALL
 LID_Z = TRAY_H
 ESP_X0 = -(R_IN - ESP_WALL_GAP)      # USB end of the board
+DF_X = R_IN - DF_WALL_GAP - DF_S / 2
+IR_RADIUS = R_IN - IR_WALL_GAP
 ESP_XC = ESP_X0 + ESP_L / 2
 ESP_Z = FLOOR + ESP_LEDGE_Z          # Board underside
 BTN_A = R + BTN_PROTRUDE - BTN_TOTAL_H  # Button base, radial distance
