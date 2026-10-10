@@ -33,7 +33,7 @@ OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 # ============================================================== Parameters
 
 # Shell
-R = 79.0              # Outer radius (158 mm across)
+R = 70.0              # Outer radius (140 mm across, the smallest this layout allows)
 WALL = 1.6            # 4 perimeters with a 0.4 mm nozzle
 FLOOR = 1.6           # Also sets the IR sensors' height above the table
 LID = 1.2
@@ -48,8 +48,8 @@ PLATE_FOOT_RING_ID = 162.0
 BAT_L, BAT_W = 68.7, 64.2
 BAT_H = 19.0          # Body height
 BAT_SW_H = 22.5       # Height including the switch
-BAT_X, BAT_Y = 14.85, 0.0
-BAT_ROT = 0           # 0: long side along X, 90: long side along Y
+BAT_X, BAT_Y = 20.0, 0.0
+BAT_ROT = 90          # 0: long side along X, 90: long side along Y
 BAT_SW = (12.0, 8.0)  # Switch footprint, near one end of the cover
 BAT_GUIDE_H = 6.0
 
@@ -68,17 +68,17 @@ USB_SLOT = (13.0, 7.5)     # Slot width, height through the left wall
 
 # GY-521 (MPU-6050), glued flat to the floor (any orientation; calibrated at boot)
 GY_L, GY_W, GY_H = 21.0, 16.0, 4.0
-GY_POS = None         # (x, y, degrees); None = under the ESP32 between its header rows
+GY_POS = None        # (x, y, degrees); None = under the ESP32 between its header rows
 
 # DFPlayer Mini
 DF_S, DF_H = 20.5, 6.0
-DF_X, DF_Y = 61.75, 0.0
+DF_X, DF_Y = -27.0, 27.0
 DF_GUIDE_H = 4.0
 
 # Speaker (31 x 28 x 15 sealed box), face down on a hollow plenum
 SPK_L, SPK_W, SPK_H = 31.0, 28.0, 15.0
-SPK_ANGLE = 90        # Direction from the centre to the speaker; vents face the same way
-SPK_DIST = 50.0       # Speaker centre from the tray centre
+SPK_ANGLE = 260       # Direction from the centre to the speaker; vents face the same way
+SPK_DIST = 52.4      # Speaker centre from the tray centre
 PLENUM_H = 4.4        # Total plenum height above the floor
 PLENUM_TOP = 1.2      # Plenum roof thickness
 PLENUM_HALF_W = 18.0
@@ -90,13 +90,13 @@ IR_L, IR_W, IR_PCB = 35.0, 10.0, 1.6
 IR_BODY_H = 7.0       # Sensor body height (sets the PCB height above the floor)
 IR_SENSOR_U = 3.5     # Sensor centre from the sensor end of the module
 IR_WALL_GAP = 9.4     # Module centreline to the wall's inner face
-IR_ANGLES = [50, 135, 215, 270, 320]  # Degrees, counter-clockwise from +X
-IR_PIN_DIR = [-1, -1, 1, 1, -1]       # Which end the header pins leave from
+IR_ANGLES = [0, 60, 140, 220, 300]  # Degrees, counter-clockwise from +X
+IR_PIN_DIR = [1, 1, 1, 1, 1]       # Which end the header pins leave from
 IR_PIN_LEN = 6.0
 IR_WINDOW = (10.4, 7.0)               # Floor window across, along the module
 
-# 6x6x9.5 mm tactile buttons in the right wall
-BTN_ANGLES = [15, -15]
+# 6x6x9.5 mm tactile buttons in the back wall
+BTN_ANGLES = [90, 115]
 BTN_Z = 12.0          # Plunger centre height
 BTN_BODY, BTN_BODY_H = 6.0, 3.5
 BTN_TOTAL_H = 9.5
@@ -114,7 +114,7 @@ BAT_SEAT = 8.0        # Width of the floor band the battery holder is glued to
 LID_RING_W = 5.0      # Lid is a ring this far inside the wall (0 = solid lid)
 
 # Lid tabs
-TAB_ANGLES = [30, 150, 270]
+TAB_ANGLES = [45, 165, 315]
 TAB_LEN, TAB_T, TAB_H = 10.0, 1.5, 3.0
 
 RENDER_PREVIEWS = True
@@ -568,6 +568,24 @@ def check_solid(obj):
     return bad, vol
 
 
+def count_pieces(obj):
+    """Number of separate solids in a mesh (a print part should be exactly one)."""
+    mesh = obj.data
+    parent = list(range(len(mesh.vertices)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for e in mesh.edges:
+        a, b = find(e.vertices[0]), find(e.vertices[1])
+        if a != b:
+            parent[a] = b
+    return len({find(i) for i in range(len(mesh.vertices))})
+
+
 def run_checks(comps, tray, lid):
     problems = []
 
@@ -591,6 +609,9 @@ def run_checks(comps, tray, lid):
             problems.append(f"{obj.name} is not watertight ({bad} non-manifold edges)")
         if vol <= 0:
             problems.append(f"{obj.name} has invalid volume ({vol:.1f} mm^3)")
+        pieces = count_pieces(obj)
+        if pieces != 1:
+            problems.append(f"{obj.name} is {pieces} separate pieces (floor islands?); it must print as one")
 
     if 2 * R > PLATE_FOOT_RING_ID - 2:
         problems.append(f"Enclosure ({2 * R:.1f} mm) may not fit inside the plate's foot ring "

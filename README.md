@@ -38,7 +38,7 @@ Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … i
 
 ## Enclosure (`enclosure/`)
 
-`make_enclosure.py` generates the round 3D-printed tray and lid (158 mm across, 24.3 mm tall) that sit under the plate, along with stand-in blocks for every component. All dimensions are parameters at the top of the script.
+`make_enclosure.py` generates the round 3D-printed tray and lid (140 mm across, 24.3 mm tall) that sit under the plate, along with stand-in blocks for every component. All dimensions are parameters at the top of the script.
 
 | File | Contents |
 | --- | --- |
@@ -46,7 +46,7 @@ Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … i
 | `plate_enclosure.blend` | Assembled model with component stand-ins (not printed). |
 | `preview_inside.png`, `preview_outside.png` | Renders with the lid off and on. |
 
-To cut print time, the outer wall is a closed 1.6 mm shell (4 perimeters with a 0.4 mm nozzle). The floor is open wherever nothing rests on it, keeping solid pads under each part plus a rim and radial ribs, and the lid is a 5 mm ring with locating tabs. At 158 mm this uses 49.4 cm³ of plastic, about 37% less than the original solid design. Set `FLOOR_CUTOUTS = False` or `LID_RING_W = 0` to return to a solid floor or lid.
+To cut print time, the outer wall is a closed 1.6 mm shell (4 perimeters with a 0.4 mm nozzle). The floor is open wherever nothing rests on it, keeping solid pads under each part plus a rim and radial ribs, and the lid is a 5 mm ring with locating tabs. At 140 mm this uses 43.1 cm³ of plastic, about 45% less than the original 156 mm solid design. Set `FLOOR_CUTOUTS = False` or `LID_RING_W = 0` to return to a solid floor or lid.
 
 Rebuild after changing a parameter (run in the `enclosure` folder):
 
@@ -58,5 +58,6 @@ The script checks that no component hits a wall, the lid, or another component, 
 
 Before printing:
 
-- Measure the inside diameter of the plate's foot ring and set `PLATE_FOOT_RING_ID`. The enclosure needs about 2 mm of clearance. `R` can go down to 78 (156 mm across) with the current layout; the ESP32, IR sensors and DFPlayer follow the wall automatically.
+- Measure the inside diameter of the plate's foot ring and set `PLATE_FOOT_RING_ID`. The enclosure needs about 2 mm of clearance.
+- The layout is packed for the smallest size: the ESP32 sits on the left with its USB-C port in the wall, the battery holder is turned 90° on the right, the speaker vents face the front-left, and the two buttons are in the back wall. The five IR sensors are spread no more than 80° apart around the rim. Some parts are only a fraction of a millimetre apart, so plan wire routes before gluing. Increase `R` for more wiring room and rerun the checks.
 - Hold a TCRT5000 module against its floor window. If the window is off-centre, adjust `IR_SENSOR_U` and rebuild.
