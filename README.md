@@ -46,6 +46,8 @@ Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … i
 | `plate_enclosure.blend` | Assembled model with component stand-ins (not printed). |
 | `preview_inside.png`, `preview_outside.png` | Renders with the lid off and on. |
 
+To cut print time, the outer wall is a closed 1.6 mm shell (4 perimeters with a 0.4 mm nozzle). The floor is open wherever nothing rests on it, keeping solid pads under each part plus a rim and radial ribs, and the lid is a 5 mm ring with locating tabs. This brings the plastic from 77.9 cm³ to 48.9 cm³ (about 37% less). Set `FLOOR_CUTOUTS = False` or `LID_RING_W = 0` to return to a solid floor or lid.
+
 Rebuild after changing a parameter (run in the `enclosure` folder):
 
 ```

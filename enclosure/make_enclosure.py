@@ -2,7 +2,10 @@
 Cy-Ramick plate enclosure generator (Blender 5.2).
 
 Builds the round 3D-printed tray and lid that sit under the plate, plus
-stand-in blocks for every component, checks the fit, and writes:
+stand-in blocks for every component, checks the fit, and writes the files
+below. To keep print time down, the outer shell stays closed but the floor
+is opened wherever nothing rests on it and the lid is a ring.
+
 
   tray.stl, lid.stl            print files in mm (lid already flipped tabs-up)
   plate_enclosure.blend        assembled model with component stand-ins
@@ -31,8 +34,8 @@ OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Shell
 R = 78.0              # Outer radius (156 mm across)
-WALL = 2.0
-FLOOR = 1.6
+WALL = 1.6            # 4 perimeters with a 0.4 mm nozzle
+FLOOR = 1.6           # Also sets the IR sensors' height above the table
 LID = 1.2
 TRAY_H = 23.1         # Tray height including the floor; lid sits on top
 CLEAR = 0.3           # Fit clearance around located parts
@@ -95,6 +98,15 @@ BTN_TOTAL_H = 9.5
 BTN_PLUNGER_D = 3.5
 BTN_HOLE_D = 4.0
 BTN_PROTRUDE = 2.4    # Plunger beyond the outer wall
+
+# Print-time savings
+FLOOR_CUTOUTS = True  # Open the floor wherever nothing rests on it
+FLOOR_RIM = 5.0       # Solid floor band inside the wall
+FLOOR_PAD = 2.0       # Solid floor margin around parts and guides
+FLOOR_SPOKES = 8      # Radial floor ribs that keep the floor stiff
+SPOKE_W = 5.0
+BAT_SEAT = 8.0        # Width of the floor band the battery holder is glued to
+LID_RING_W = 5.0      # Lid is a ring this far inside the wall (0 = solid lid)
 
 # Lid tabs
 TAB_ANGLES = [30, 150, 270]
@@ -444,6 +456,50 @@ def lid_tabs():
     return tabs
 
 
+def floor_keep_pads():
+    """2D-extruded solids marking floor areas that must stay solid."""
+    F = FLOOR
+    z0, z1 = -2.0, F + 1.0
+    m = FLOOR_PAD
+    g = CLEAR + 1.2 + m   # Margin that also covers the corner guides
+    pads = []
+    pads.append(box(BAT_X - BAT_L / 2 - g, BAT_X + BAT_L / 2 + g,
+                    BAT_Y - BAT_W / 2 - g, BAT_Y + BAT_W / 2 + g, z0, z1))
+    pads.append(box(DF_X - DF_S / 2 - g, DF_X + DF_S / 2 + g, -DF_S / 2 - g, DF_S / 2 + g, z0, z1))
+    for xa, xb in ((ESP_X0 - 0.6, ESP_X0 + 5.0), (ESP_X0 + ESP_L - 5.0, ESP_X0 + ESP_L)):
+        pads.append(box(xa - m, xb + m, -ESP_W / 2 - m, ESP_W / 2 + m, z0, z1))
+    pads.append(box(ESP_XC - GY_L / 2 - m, ESP_XC + GY_L / 2 + m, -GY_W / 2 - m, GY_W / 2 + m, z0, z1))
+    y0 = SPK_Y - SPK_W / 2 - 2.0
+    pads.append(prism(rect_in_circle(-PLENUM_HALF_W - m, PLENUM_HALF_W + m, y0 - m, R + 5, R + 1), z0, z1))
+    for deg in IR_ANGLES:
+        hu = IR_W / 2 + CLEAR + 1.2 + m
+        pads.append(obox(IR_RADIUS - hu, IR_RADIUS + hu, -IR_L / 2 - m, IR_L / 2 + m, z0, z1, deg))
+    for deg in BTN_ANGLES:
+        half = BTN_BODY / 2 + 0.15 + 1.2 + m
+        pads.append(obox(BTN_A - 1.6 - m, R + 1, -half, half, z0, z1, deg))
+    for i in range(FLOOR_SPOKES):
+        deg = 360.0 * i / FLOOR_SPOKES + 22.5
+        pads.append(obox(-1, R + 1, -SPOKE_W / 2, SPOKE_W / 2, z0, z1, deg))
+    pads.append(cyl(0, 0, 8, z0, z1, 48))
+    return pads
+
+
+def floor_cutter(tmp_collection):
+    """One solid covering every floor opening: the open disc minus the keep pads,
+    plus the centre of the battery seat."""
+    cutter = make_object("floor_cutter", [cyl(0, 0, R_IN - FLOOR_RIM, -1, FLOOR + 0.05)], tmp_collection)
+    apply_boolean(cutter, floor_keep_pads(), "DIFFERENCE", tmp_collection)
+    s = BAT_SEAT
+    seat = box(BAT_X - BAT_L / 2 + s, BAT_X + BAT_L / 2 - s, BAT_Y - BAT_W / 2 + s, BAT_Y + BAT_W / 2 - s,
+               -1, FLOOR + 0.05)
+    apply_boolean(cutter, [seat], "UNION", tmp_collection)
+    mesh = cutter.data
+    part = ([v.co.copy() for v in mesh.vertices], [list(p.vertices) for p in mesh.polygons])
+    bpy.data.objects.remove(cutter)
+    bpy.data.meshes.remove(mesh)
+    return part
+
+
 # ============================================================== Checks
 
 def shrink(part, d=0.05):
@@ -578,11 +634,17 @@ def main():
     tray = make_object("Tray", [cyl(0, 0, R, 0, TRAY_H)], print_col, shell_mat)
     apply_boolean(tray, [cyl(0, 0, R_IN, FLOOR, TRAY_H + 1)], "DIFFERENCE", tmp_col)
     apply_boolean(tray, tray_adds(), "UNION", tmp_col)
-    apply_boolean(tray, tray_cuts(), "DIFFERENCE", tmp_col)
+    cuts = tray_cuts()
+    if FLOOR_CUTOUTS:
+        cuts.append(floor_cutter(tmp_col))
+    apply_boolean(tray, cuts, "DIFFERENCE", tmp_col)
 
     lid = make_object("Lid", [cyl(0, 0, R, LID_Z, LID_Z + LID)], print_col, lid_mat)
     apply_boolean(lid, lid_tabs(), "UNION", tmp_col)
-    apply_boolean(lid, [lid_window()], "DIFFERENCE", tmp_col)
+    if LID_RING_W > 0:
+        apply_boolean(lid, [cyl(0, 0, R_IN - LID_RING_W, LID_Z - 1, LID_Z + LID + 1)], "DIFFERENCE", tmp_col)
+    else:
+        apply_boolean(lid, [lid_window()], "DIFFERENCE", tmp_col)
     bpy.data.collections.remove(tmp_col)
 
     comps = components()
@@ -597,6 +659,8 @@ def main():
               lambda p: Vector((p.x, -p.y, top - p.z)))
 
     problems = run_checks(comps, tray, lid)
+    for obj in (tray, lid):
+        print(f"{obj.name} plastic: {check_solid(obj)[1] / 1000:.1f} cm^3")
 
     if RENDER_PREVIEWS:
         cam = setup_render()
