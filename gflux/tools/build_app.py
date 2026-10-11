@@ -7,6 +7,7 @@
 PyInstaller builds for the OS it runs on, so the Windows .exe is built on
 Windows (the GitHub workflow .github/workflows/gflux-app.yml does this).
 """
+import importlib.util
 import os
 import shutil
 import sys
@@ -68,6 +69,11 @@ def main():
     ]
     if icon and sys.platform == 'win32':
         args += ['--icon', icon]
+    # The "Locate KiCad" file picker uses tkinter; it is imported lazily, so name it.
+    if importlib.util.find_spec('tkinter'):
+        args += ['--hidden-import', 'tkinter', '--hidden-import', 'tkinter.filedialog']
+    else:
+        print('WARNING: this Python has no tkinter; the app will ask for a pasted path instead of a file picker')
     PyInstaller.__main__.run(args)
     print('Built:', ', '.join(os.listdir(DIST)))
 
