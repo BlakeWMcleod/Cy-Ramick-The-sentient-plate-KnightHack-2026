@@ -6,10 +6,16 @@ window.GFLUX = window.GFLUX || {};
 GFLUX.check = (function () {
   const DRIVEN = /^(TRIG|IN|IN\d|DIN|CS|CLK|SCK|MOSI|RST|SCL|R|G|B|ENA|ENB|LRC|BCLK|RX|XSHUT|SIG|SD)$/;
 
-  /** -> [{ level: 'error' | 'warn', text, uid? }], errors first. */
+  /** -> [{ level: 'error' | 'warn', kind: 'fault' | 'missing', text, uid? }], errors first.
+   *  'fault' = something wired wrong (shown live); 'missing' = not wired yet (shown on Finalize). */
   function run(state) {
     const out = [], seen = new Set();
-    const add = (level, text, uid) => { if (!seen.has(text)) { seen.add(text); out.push({ level, text, uid }); } };
+    const add = (level, text, uid) => {
+      if (seen.has(text)) return;
+      seen.add(text);
+      const kind = /^(Missing connection|Unwired|No ESP32|\d* ?[Ll]oose wire)/.test(text) ? 'missing' : 'fault';
+      out.push({ level, kind, text, uid });
+    };
     const nl = GFLUX.buildNets(state);
     const byUid = new Map(state.parts.map((p) => [p.uid, p]));
     const nameOf = (uid) => GFLUX.getPart(byUid.get(uid).type).name;
