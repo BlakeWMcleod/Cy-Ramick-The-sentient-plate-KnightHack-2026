@@ -32,7 +32,11 @@
  *   9  Button not pressed during the test; then button number - wiring, or not installed yet
  *   10 Last restart was a brownout                     - weak batteries or power wiring (D1/VIN)
  *
- * Hold button 1 while switching on to replay the last saved report without testing.
+ * Buttons: every spare even GPIO (0 = BOOT button, 12, 14, 18) is button 1 and every
+ * spare odd GPIO (5, 13, 15, 19, 23) is button 2. Touch any of them to GND to press.
+ *
+ * Hold button 1 while switching on to replay the last saved report without testing
+ * (use GPIO 12, 14 or 18 for this; holding BOOT at power-on enters upload mode).
  * The full report is also printed on Serial at 115200 baud.
  *
  * Required library: "DFRobotDFPlayerMini" (Arduino Library Manager).
@@ -52,7 +56,9 @@ const int PIN_SDA     = 21;
 const int PIN_SCL     = 22;
 const int IR_PINS[]   = {32, 33, 25, 26, 27};
 const int NUM_IR      = sizeof(IR_PINS) / sizeof(IR_PINS[0]);
-const int BTN_PINS[]  = {18, 19};
+// Every spare even GPIO is button 1, every spare odd GPIO is button 2 (to GND).
+const int BTN1_PINS[] = {0, 12, 14, 18};      // GPIO0 is the BOOT button on the board
+const int BTN2_PINS[] = {5, 13, 15, 19, 23};
 const int NUM_BTN     = 2;
 const int PIN_LED     = 2;      // Onboard LED on the ESP32 DevKit
 
@@ -219,6 +225,31 @@ bool mpuGravity(float &x, float &y, float &z) {
   return true;
 }
 
+// ================================================================ Buttons
+
+void buttonGroup(int i, const int *&pins, int &count) {
+  if (i == 0) { pins = BTN1_PINS; count = sizeof(BTN1_PINS) / sizeof(int); }
+  else        { pins = BTN2_PINS; count = sizeof(BTN2_PINS) / sizeof(int); }
+}
+
+void buttonsInit() {
+  for (int p : BTN1_PINS) pinMode(p, INPUT_PULLUP);
+  for (int p : BTN2_PINS) pinMode(p, INPUT_PULLUP);
+}
+
+// First pin of button i that is pulled LOW, or -1.
+int buttonLowPin(int i) {
+  const int *pins;
+  int count;
+  buttonGroup(i, pins, count);
+  for (int k = 0; k < count; k++) {
+    if (digitalRead(pins[k]) == LOW) return pins[k];
+  }
+  return -1;
+}
+
+bool buttonDown(int i) { return buttonLowPin(i) >= 0; }
+
 // ================================================================ Tests
 
 void testBrownout() {
@@ -338,11 +369,16 @@ void testIRWiring() {
 
 void testButtonsStuck() {
   Serial.println("[Buttons: stuck check]");
+  buttonsInit();
+  delay(5);
   for (int i = 0; i < NUM_BTN; i++) {
-    pinMode(BTN_PINS[i], INPUT_PULLUP);
-    delay(5);
-    if (digitalRead(BTN_PINS[i]) == LOW) fail(8, i + 1);
-    else Serial.printf("  pass: button %d (GPIO%d) not stuck\n", i + 1, BTN_PINS[i]);
+    int p = buttonLowPin(i);
+    if (p >= 0) {
+      Serial.printf("  GPIO%d is held LOW\n", p);
+      fail(8, i + 1);
+    } else {
+      Serial.printf("  pass: button %d not stuck\n", i + 1);
+    }
   }
 }
 
@@ -395,16 +431,21 @@ void testButtonPress(int i) {
   uint32_t t = millis();
   bool pressed = false;
   while (millis() - t < BUTTON_WINDOW_MS) {
-    if (digitalRead(BTN_PINS[i]) == LOW) {
+    int p = buttonLowPin(i);
+    if (p >= 0) {
       delay(30);
-      if (digitalRead(BTN_PINS[i]) == LOW) { pressed = true; break; }
+      if (buttonDown(i)) {
+        pressed = true;
+        Serial.printf("  GPIO%d pressed\n", p);
+        break;
+      }
     }
     delay(5);
   }
   if (pressed) {
     pass("button pressed");
     beeps(BEEP_TRACK, 1);
-    while (digitalRead(BTN_PINS[i]) == LOW) delay(10);  // Wait for release
+    while (buttonDown(i)) delay(10);  // Wait for release
   } else {
     fail(9, i + 1);
   }
@@ -429,9 +470,9 @@ void setup() {
   }
 
   // Hold button 1 at power-on to replay the saved report without testing.
-  pinMode(BTN_PINS[0], INPUT_PULLUP);
+  buttonsInit();
   delay(20);
-  bool replayOnly = digitalRead(BTN_PINS[0]) == LOW && runs > 0;
+  bool replayOnly = buttonDown(0) && runs > 0;
 
   testBrownout();
   testDFPlayer();
@@ -459,10 +500,10 @@ void setup() {
 
 bool anyButtonPressed() {
   for (int i = 0; i < NUM_BTN; i++) {
-    if (digitalRead(BTN_PINS[i]) == LOW) {
+    if (buttonDown(i)) {
       delay(30);
-      if (digitalRead(BTN_PINS[i]) == LOW) {
-        while (digitalRead(BTN_PINS[i]) == LOW) delay(10);  // Wait for release
+      if (buttonDown(i)) {
+        while (buttonDown(i)) delay(10);  // Wait for release
         return true;
       }
     }

@@ -14,14 +14,16 @@ The plate talks continuously. Each clip is chosen from the SD-card folder that m
 | DFPlayer Mini BUSY (pin 16) | GPIO 4 |
 | GY-521 (MPU-6050) SDA / SCL | GPIO 21 / GPIO 22 |
 | TCRT5000 sensors 1–5, DO | GPIO 32, 33, 25, 26, 27 |
-| Button 1 (wait for lift), other leg to GND | GPIO 18 |
-| Button 2 (mute), other leg to GND | GPIO 19 |
+| Button 1 (wait for lift), other leg to GND | Any of GPIO 0 (BOOT button), 12, 14, 18 |
+| Button 2 (mute), other leg to GND | Any of GPIO 5, 13, 15, 19, 23 |
 
 The five TCRT5000 sensors face down at the table from the rim of the enclosure. When all of them see the table, the plate is resting. When none of them do, it has been lifted. When only some do, it is hanging over the edge of the table.
 
 Switch the plate on while it rests flat on the table. At boot, the firmware records that orientation as "flat" and reads each IR sensor's output level as its "sees the table" level, so the sensor polarity does not need to be known in advance.
 
 ### Buttons
+
+Every spare even-numbered GPIO acts as button 1 and every spare odd-numbered GPIO as button 2, so touching any of those pins to GND works as a press. The board's BOOT button (GPIO 0) is also button 1. Pins already in use, the flash pins (6–11), USB serial (1, 3), the onboard LED (2) and the input-only pins (34–39) are excluded.
 
 - **Button 1 – wait for lift:** fades the plate to silence. It stays quiet until it has been set on the table and then lifted off it, at which point it starts talking again. Press again to cancel.
 - **Button 2 – mute:** toggles mute. Unmuting fades a new clip in.
@@ -59,7 +61,7 @@ Upload this sketch to check every part before installing the main firmware. Copy
 | 9.n | Button *n* not pressed during the test | Wiring, or not installed yet |
 | 10 | Last restart was a brownout | Weak batteries or power wiring (D1, VIN) |
 
-Results are saved in the ESP32's flash. The previous report is printed on Serial (115200 baud) at every start, and holding button 1 while switching on replays it without re-testing.
+Results are saved in the ESP32's flash. The previous report is printed on Serial (115200 baud) at every start, and holding button 1 while switching on replays it without re-testing (use GPIO 12, 14 or 18 for this; holding BOOT at power-on enters upload mode). Buttons follow the same even/odd pin rule as the main firmware.
 
 ## Enclosure (`enclosure/`)
 

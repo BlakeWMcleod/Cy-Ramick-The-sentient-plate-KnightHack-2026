@@ -30,11 +30,12 @@
  * as its "sees the table" level, so neither the GY-521 mounting direction nor
  * the TCRT5000 output polarity needs to be known in advance.
  *
- * Buttons (to GND, internal pull-ups):
- *   Button 1 (GPIO18)  Wait for lift: fades to silence and stays quiet until the
- *                      plate is set on the table and then lifted off it. Press
- *                      again to cancel.
- *   Button 2 (GPIO19)  Mute on/off.
+ * Buttons (to GND, internal pull-ups). Every spare even GPIO acts as button 1
+ * and every spare odd GPIO as button 2, so touching any of them to GND works:
+ *   Button 1 (GPIO 0 = BOOT button, 12, 14, 18)  Wait for lift: fades to silence
+ *            and stays quiet until the plate is set on the table and then lifted
+ *            off it. Press again to cancel.
+ *   Button 2 (GPIO 5, 13, 15, 19, 23)           Mute on/off.
  *
  * Required library: "DFRobotDFPlayerMini" (Arduino Library Manager).
  */
@@ -57,8 +58,10 @@ const int NUM_IR      = sizeof(IR_PINS) / sizeof(IR_PINS[0]);
 const bool IR_AUTO_POLARITY = true;
 const int  IR_SURFACE_LEVEL = LOW;
 
-const int PIN_BTN_LIFT = 18;          // Button 1: wait for lift
-const int PIN_BTN_MUTE = 19;          // Button 2: mute
+// Spare GPIOs only: in-use pins, flash pins (6-11), USB serial (1, 3), the
+// onboard LED (2) and input-only pins without pull-ups (34-39) are left out.
+const int BTN1_PINS[] = {0, 12, 14, 18};      // Even: wait for lift (GPIO0 is the BOOT button)
+const int BTN2_PINS[] = {5, 13, 15, 19, 23};  // Odd: mute
 const uint16_t DEBOUNCE_MS = 30;
 
 // ---------------------------------------------------------------- Audio
@@ -103,13 +106,14 @@ uint8_t  targetFolder = FOLDER_FLAT;
 
 // Button-controlled silence
 struct Button {
-  int pin;
+  const int *pins;
+  int count;
   int stableLevel;
   int lastRaw;
   uint32_t changedAt;
 };
-Button btnLift = {PIN_BTN_LIFT, HIGH, HIGH, 0};
-Button btnMute = {PIN_BTN_MUTE, HIGH, HIGH, 0};
+Button btnLift = {BTN1_PINS, sizeof(BTN1_PINS) / sizeof(int), HIGH, HIGH, 0};
+Button btnMute = {BTN2_PINS, sizeof(BTN2_PINS) / sizeof(int), HIGH, HIGH, 0};
 bool muted = false;
 bool waitingForLift = false;
 bool liftSawTable = false;            // The plate must be seen on the table before a lift counts
@@ -363,8 +367,16 @@ void loadTrackCounts() {
 // ================================================================ Buttons
 
 // Returns true once per press (debounced HIGH -> LOW transition).
+// LOW if any pin in the button's group is pulled to GND.
+int readButton(const Button &b) {
+  for (int i = 0; i < b.count; i++) {
+    if (digitalRead(b.pins[i]) == LOW) return LOW;
+  }
+  return HIGH;
+}
+
 bool pressed(Button &b) {
-  int raw = digitalRead(b.pin);
+  int raw = readButton(b);
   uint32_t now = millis();
   if (raw != b.lastRaw) {
     b.lastRaw = raw;
@@ -411,8 +423,8 @@ void updateLiftWait() {
 void setup() {
   Serial.begin(115200);
   if (PIN_DF_BUSY >= 0) pinMode(PIN_DF_BUSY, INPUT_PULLUP);
-  pinMode(PIN_BTN_LIFT, INPUT_PULLUP);
-  pinMode(PIN_BTN_MUTE, INPUT_PULLUP);
+  for (int p : BTN1_PINS) pinMode(p, INPUT_PULLUP);
+  for (int p : BTN2_PINS) pinMode(p, INPUT_PULLUP);
   randomSeed(esp_random());
 
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
