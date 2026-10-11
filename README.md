@@ -18,7 +18,7 @@ Opening `gflux/index.html` Does **NOT** Work as intended, sorry hackers
 
 ## Using GFLUX
 
-| To… | Do this |
+| To… |  |
 | --- | --- |
 | Add a part | Open **Library** on the right, then click a part or drag it onto the grid |
 | See a part's full name and where to buy it | Hover over its name tag |
