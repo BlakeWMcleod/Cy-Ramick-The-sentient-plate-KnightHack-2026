@@ -34,8 +34,6 @@ Opening `gflux/index.html` Does **NOT** Work as intended, sorry hackers
 Wiring an LED straight to a GPIO or a supply automatically adds a 220 Ω resistor. You can turn that off in the **Wire color** menu.
 This program should detect short circuits, but may not supply step up converters
 
-### Wire colours
-
 - **Signal pins:** crimson red, orange, yellow, green, blue, indigo and violet 
 - **Power:** red
 - **Ground:** black
