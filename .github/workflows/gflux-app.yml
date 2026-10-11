@@ -10,6 +10,12 @@ on:
 permissions:
   contents: write
 
+# Only the newest push publishes; older in-progress builds are cancelled so
+# the download page never ends up with an older app.
+concurrency:
+  group: gflux-app-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
