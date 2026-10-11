@@ -235,7 +235,21 @@ GFLUX.art = (function () {
       [['#e53935', 0.3], ['#e53935', 0.4], ['#6d3b1d', 0.5], ['#d4af37', 0.68]].map(([col, f]) => r(w * f, y - 7, 4, 14, col)).join('');
   }
 
-  /** Header strip + gold pins, plus silkscreen labels. */
+  /** Wire colour key for a controller pin: GND black, supply pins red, and
+   *  every signal pin takes the next colour of the rainbow (ROYGBIV) in order. */
+  const RAINBOW = ['R', 'O', 'Y', 'G', 'B', 'I', 'V'];
+  function pinColor(def, num) {
+    const pin = def.pins.find((p) => p.num === num);
+    if (!pin) return null;
+    const rail = def.rails && def.rails[pin.name];
+    if (pin.kind === 'gnd' || rail === 'GND') return 'K';
+    if (rail || pin.kind === 'v3' || pin.kind === 'v5') return 'R';
+    const signals = def.pins.filter((p) => !(def.rails && def.rails[p.name]) && p.kind !== 'gnd' && p.kind !== 'v3' && p.kind !== 'v5');
+    return RAINBOW[signals.indexOf(pin) % RAINBOW.length];
+  }
+  const KEY_HEX = { R: '#e53935', O: '#fb8c00', Y: '#fdd835', G: '#43a047', B: '#1e88e5', I: '#3f51b5', V: '#8e24aa', K: '#1c1c1c', W: '#f4f4f4' };
+
+  /** Header strip + pins (gold, or rainbow-coded on controller boards), plus silkscreen labels. */
   function pinsAndLabels(def, onBoard) {
     let s = '';
     const bySide = { left: [], right: [], top: [], bottom: [] };
@@ -253,7 +267,10 @@ GFLUX.art = (function () {
       const turn = !vertical && longest > 3;
       for (const p of list) {
         const x = p.x * G, y = p.y * G;
-        s += onBoard ? r(x - 4, y - 4, 8, 8, GOLD, 'rx="1.2"') : c(x, y, 4, '#c8c8c8', 'stroke="#888"');
+        if (onBoard && def.controller) {
+          const key = pinColor(def, p.num);
+          s += r(x - 5, y - 5, 10, 10, KEY_HEX[key], key === 'K' ? 'stroke="#9a9a9a" stroke-width="1.2"' : '') + r(x - 2, y - 2, 4, 4, GOLD);
+        } else s += onBoard ? r(x - 4, y - 4, 8, 8, GOLD, 'rx="1.2"') : c(x, y, 4, '#c8c8c8', 'stroke="#888"');
         if (!onBoard && def.pins.length <= 2) continue;
         const fill = onBoard ? 'rgba(255,255,255,.92)' : 'var(--ink-2)';
         const fs = 7.5;
@@ -303,9 +320,9 @@ GFLUX.art = (function () {
 
   /** Shared gradients/patterns, injected once into the canvas <defs>. */
   const DEFS = `
-    <linearGradient id="gx-silver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f5f6"/><stop offset=".5" stop-color="#c3c7cc"/><stop offset="1" stop-color="#9ca1a7"/></linearGradient>
+    <linearGradient id="gx-silver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e6e8ea"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
     <pattern id="gx-mesh" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#8a8f95"/><circle cx="2" cy="2" r="1.1" fill="#3a3d41"/></pattern>
     <radialGradient id="gx-rainbow"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#ff5ad1"/><stop offset=".75" stop-color="#49c6ff"/><stop offset="1" stop-color="#7cff6b"/></radialGradient>`;
 
-  return { draw, DEFS, G };
+  return { draw, DEFS, G, pinColor };
 })();

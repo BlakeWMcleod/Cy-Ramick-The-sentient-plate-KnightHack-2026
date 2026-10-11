@@ -14,6 +14,12 @@ window.GFLUX = window.GFLUX || {};
 
 GFLUX.pinKey = (uid, pin) => uid + ':' + pin;
 
+/* A wire end is either a pin { part, pin } or a loose end on the grid { x, y }.
+ * Loose ends that meet at the same grid point are connected. */
+GFLUX.isPinEnd = (end) => end && end.part != null;
+GFLUX.pointKey = (x, y) => 'pt:' + x + ',' + y;
+GFLUX.endKey = (end) => (GFLUX.isPinEnd(end) ? GFLUX.pinKey(end.part, end.pin) : GFLUX.pointKey(end.x, end.y));
+
 /** Size of a placed part's bounding box after rotation. */
 GFLUX.partBox = function (inst) {
   const def = GFLUX.getPart(inst.type);
@@ -89,9 +95,10 @@ GFLUX.buildNets = function (state) {
   const find = (k) => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
   const add = (k) => { if (!parent.has(k)) parent.set(k, k); };
   const uids = new Set(state.parts.map((p) => p.uid));
+  const alive = (end) => !GFLUX.isPinEnd(end) || uids.has(end.part);
   for (const w of state.wires) {
-    if (!uids.has(w.a.part) || !uids.has(w.b.part)) continue;
-    const ka = GFLUX.pinKey(w.a.part, w.a.pin), kb = GFLUX.pinKey(w.b.part, w.b.pin);
+    if (!alive(w.a) || !alive(w.b)) continue;
+    const ka = GFLUX.endKey(w.a), kb = GFLUX.endKey(w.b);
     add(ka); add(kb);
     parent.set(find(ka), find(kb));
   }
@@ -107,7 +114,9 @@ GFLUX.buildNets = function (state) {
   const nets = [], byPin = new Map(), used = new Map();
   let anon = 0;
   for (const keys of groups.values()) {
-    const pins = keys.map((k) => { const i = k.indexOf(':'); return { uid: k.slice(0, i), pin: k.slice(i + 1) }; });
+    // Loose wire ends join nets but aren't pins themselves.
+    const pins = keys.filter((k) => !k.startsWith('pt:')).map((k) => { const i = k.indexOf(':'); return { uid: k.slice(0, i), pin: k.slice(i + 1) }; });
+    if (!pins.length) continue;
     const rails = new Set(); let gpio = null, ctlName = null;
     for (const p of pins) {
       const role = GFLUX.pinRole(byUid.get(p.uid), p.pin);

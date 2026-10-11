@@ -200,7 +200,7 @@
 
     // -- composer
     const input = el('textarea', { class: 'gx-as-input', rows: '2', placeholder: 'e.g. Beep when something is closer than 10 cm', 'aria-label': 'Message' });
-    const starterBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-ghost', text: 'Starter code', title: 'Code that tests every part, works offline' });
+    const starterBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-ghost', text: 'Starter code' });
     const sendBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-send', text: 'Send' });
     const stopBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-stop', text: 'Stop', hidden: true });
     const composer = el('div', { class: 'gx-as-compose' }, [
