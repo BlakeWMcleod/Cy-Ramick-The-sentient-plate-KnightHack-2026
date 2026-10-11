@@ -1,25 +1,9 @@
-/* GFLUX KiCad export.
- *
- *   GFLUX.kicad.schematic(state) -> KiCad 7 .kicad_sch text (opens in KiCad 7/8/9)
- *   GFLUX.kicad.pcb(state)       -> KiCad 7 .kicad_pcb text, footprints placed like the canvas
- *   GFLUX.kicad.project(state)   -> minimal .kicad_pro JSON text
- *   GFLUX.kicad.zip(files)       -> Blob (application/zip) from [{ name, data }]
- *   GFLUX.kicad.baseName(state)  -> safe file name used for every file and the KiCad project
- *   GFLUX.kicad.files(state)     -> [{ name, data }] for the three files above
- *
- * Connectivity in the schematic uses local net labels on short wire stubs, so
- * every symbol can sit in a tidy grid instead of following the breadboard.
- * Every pin is passive, which keeps ERC quiet about power pins.
- * UUIDs are hashed from part uids, so exporting twice gives identical files.
- */
 window.GFLUX = window.GFLUX || {};
 
 (function () {
-  const G = 2.54; // mm per grid unit, also the schematic pin pitch
+  const G = 2.54;
   const PAPER = [['A4', 297, 210], ['A3', 420, 297], ['A2', 594, 420], ['A1', 841, 594], ['A0', 1189, 841]];
-  const CHAR = 1.1; // rough width of one 1.27 mm KiCad glyph, used to size bodies and keep labels apart
-
-  // ---------------------------------------------------------------- helpers
+  const CHAR = 1.1;
 
   const q = (s) => '"' + String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r?\n/g, '\\n') + '"';
   const n = (v) => String(Math.round(v * 10000) / 10000);
@@ -29,13 +13,11 @@ window.GFLUX = window.GFLUX || {};
   const pinName = (name, num) => String(name || num).replace(/~/g, '-').replace(/\{/g, '(').replace(/\}/g, ')') || String(num);
   const font = (size) => `(font (size ${size} ${size}))`;
 
-  /** File-system and KiCad-project safe name. Same rule as tools/kicad_bridge.py. */
   function baseName(state) {
     const s = String((state && state.name) || '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60);
     return s || 'gflux';
   }
 
-  /** Deterministic uuid (v4 layout) from any string: four 32-bit FNV-style hashes. */
   function uuid(key) {
     const h = [0x811c9dc5, 0x01000193, 0x9e3779b9, 0x85ebca6b];
     const s = String(key);
@@ -43,7 +25,7 @@ window.GFLUX = window.GFLUX || {};
       const c = s.charCodeAt(i);
       for (let j = 0; j < 4; j++) h[j] = Math.imul(h[j] ^ c ^ (j * 0x5bd1), 0x01000193 + j * 0x2c1b3c6d) >>> 0;
     }
-    for (let j = 0; j < 4; j++) { // final avalanche, mixing the lanes together
+    for (let j = 0; j < 4; j++) {
       let x = (h[j] ^ h[(j + 1) % 4] >>> 7) >>> 0;
       x = Math.imul(x ^ (x >>> 16), 0x85ebca6b) >>> 0;
       x = Math.imul(x ^ (x >>> 13), 0xc2b2ae35) >>> 0;
@@ -57,7 +39,6 @@ window.GFLUX = window.GFLUX || {};
   const rootUuid = (state) => uuid('gflux-root:' + baseName(state));
   const symbolUuid = (state, inst) => uuid('gflux-sym:' + baseName(state) + ':' + inst.uid);
 
-  /** Pins that sit in one straight row at 1-grid pitch (headers, sockets). */
   function oneRow(def) {
     if (!def.pins.length) return false;
     const xs = new Set(def.pins.map((p) => p.x)), ys = new Set(def.pins.map((p) => p.y));
@@ -75,16 +56,14 @@ window.GFLUX = window.GFLUX || {};
     return 'GFLUX:' + symId(def.id);
   }
 
-  /** Schematic symbol shape: which pins go left/right and how big the body is. */
   function symbolShape(def) {
-    // def.pins is the laid-out array here, so a single-row part is one whose pins share a side.
     const single = new Set(def.pins.map((p) => p.side)).size <= 1;
     const left = [], right = [];
     for (const p of def.pins) {
       if (single || p.side === 'left' || p.side === 'top') left.push(p); else right.push(p);
     }
     const rows = Math.max(left.length, right.length, 1);
-    const top = Math.floor((rows - 1) / 2) * G; // y of the first pin, symbol units (y up)
+    const top = Math.floor((rows - 1) / 2) * G;
     const width = (list) => list.reduce((m, p) => Math.max(m, pinName(p.name, p.num).length), 0) * CHAR;
     const inner = width(left) + width(right) + (left.length && right.length ? 2 * G : G) + 2;
     const hw = Math.max(2 * G, snapUp(inner / 2));
@@ -116,9 +95,6 @@ window.GFLUX = window.GFLUX || {};
     return L.join('\n');
   }
 
-  // ---------------------------------------------------------------- schematic
-
-  /** Flow layout of symbols (with their label extents) on the smallest paper that fits. */
   function layoutSheet(items) {
     const MARGIN = 20, GAP = 7.62, TITLE_H = 40;
     for (const [paper, pw, ph] of PAPER) {
@@ -145,7 +121,6 @@ window.GFLUX = window.GFLUX || {};
     const shapes = new Map();
     for (const inst of parts) if (!shapes.has(inst.type)) shapes.set(inst.type, symbolShape(GFLUX.getPart(inst.type)));
 
-    // Same order as the reference designators: controllers first, then reading order.
     const order = parts.slice().sort((a, b) => {
       const ra = refs.get(a.uid), rb = refs.get(b.uid);
       const ca = GFLUX.getPart(a.type).controller ? 0 : 1, cb = GFLUX.getPart(b.type).controller ? 0 : 1;
@@ -192,7 +167,7 @@ window.GFLUX = window.GFLUX || {};
       const ref = refs.get(inst.uid);
       const su = symbolUuid(state, inst);
       for (const s of shape.pins) {
-        const px = ox + s.x, py = oy - s.y; // symbol y is up, sheet y is down
+        const px = ox + s.x, py = oy - s.y;
         const net = nl.byPin.get(GFLUX.pinKey(inst.uid, s.p.num));
         const key = inst.uid + ':' + s.p.num;
         if (!net) {
@@ -229,8 +204,6 @@ window.GFLUX = window.GFLUX || {};
     return out.join('\n') + '\n';
   }
 
-  // ---------------------------------------------------------------- pcb
-
   const LAYERS = [
     [0, 'F.Cu', 'signal'], [31, 'B.Cu', 'signal'],
     [32, 'B.Adhes', 'user', 'B.Adhesive'], [33, 'F.Adhes', 'user', 'F.Adhesive'],
@@ -252,8 +225,7 @@ window.GFLUX = window.GFLUX || {};
     const netCode = new Map();
     nl.nets.forEach((net, i) => netCode.set(net, i + 1));
 
-    // Canvas is real scale: shift so the top-left of everything lands near (30, 30) mm.
-    const OUT = 0.6, CRT = 0.85; // silkscreen and courtyard margins, grid units
+    const OUT = 0.6, CRT = 0.85;
     let minX = Infinity, minY = Infinity;
     for (const inst of parts) {
       const b = GFLUX.partBox(inst);
@@ -351,8 +323,6 @@ window.GFLUX = window.GFLUX || {};
     return out.join('\n') + '\n';
   }
 
-  // ---------------------------------------------------------------- project
-
   function project(state) {
     const name = baseName(state);
     return JSON.stringify({
@@ -380,8 +350,6 @@ window.GFLUX = window.GFLUX || {};
     ];
   }
 
-  // ---------------------------------------------------------------- zip
-
   let crcTable = null;
   function crc32(bytes) {
     if (!crcTable) {
@@ -397,7 +365,6 @@ window.GFLUX = window.GFLUX || {};
     return (c ^ 0xffffffff) >>> 0;
   }
 
-  /** Store-only ZIP (no compression). files: [{ name, data: string | Uint8Array }] */
   function zip(list) {
     const enc = new TextEncoder();
     const d = new Date();
@@ -411,9 +378,9 @@ window.GFLUX = window.GFLUX || {};
       const crc = crc32(data);
       const head = new DataView(new ArrayBuffer(30));
       head.setUint32(0, 0x04034b50, true);
-      head.setUint16(4, 20, true);          // version needed
-      head.setUint16(6, 0x0800, true);      // UTF-8 names
-      head.setUint16(8, 0, true);           // stored
+      head.setUint16(4, 20, true);
+      head.setUint16(6, 0x0800, true);
+      head.setUint16(8, 0, true);
       head.setUint16(10, time, true);
       head.setUint16(12, date, true);
       head.setUint32(14, crc, true);
@@ -425,7 +392,7 @@ window.GFLUX = window.GFLUX || {};
 
       const cd = new DataView(new ArrayBuffer(46));
       cd.setUint32(0, 0x02014b50, true);
-      cd.setUint16(4, 20, true);            // made by
+      cd.setUint16(4, 20, true);
       cd.setUint16(6, 20, true);
       cd.setUint16(8, 0x0800, true);
       cd.setUint16(10, 0, true);
@@ -435,7 +402,7 @@ window.GFLUX = window.GFLUX || {};
       cd.setUint32(20, data.length, true);
       cd.setUint32(24, data.length, true);
       cd.setUint16(28, nameBytes.length, true);
-      cd.setUint32(42, offset, true);       // extra, comment, disk, attrs stay 0
+      cd.setUint32(42, offset, true);
       central.push(new Uint8Array(cd.buffer), nameBytes);
       offset += 30 + nameBytes.length + data.length;
     }

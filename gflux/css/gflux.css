@@ -1,6 +1,3 @@
-/* GFLUX: styled after a 140-piece jumper-wire kit. Every accent is one of the
-   nine wire colours (ROYGBIV + white + black). Flat colours, square buttons,
-   white work surface. */
 :root {
   --gx-css: 1;
   --wR: #e53935; --wO: #fb8c00; --wY: #fdd835; --wG: #43a047; --wB: #1e88e5;
@@ -41,7 +38,6 @@ svg { overflow: visible; }
 .btn.primary:hover { background: #333; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-/* ------------------------------------------------------------------ top bar */
 #topbar {
   position: relative; z-index: 50; flex: none;
   display: flex; align-items: center; gap: 6px; height: 84px;
@@ -66,6 +62,10 @@ svg { overflow: visible; }
 }
 .tab-btn:hover, .tab.open .tab-btn { box-shadow: inset 0 -6px 0 var(--w); background: rgba(255, 255, 255, 0.45); }
 .tab[data-color="R"] { --w: var(--wR); } .tab[data-color="G"] { --w: var(--wG); }
+.tab[data-color="T"] { --w: #00979d; }
+.tab-light { width: 11px; height: 11px; border-radius: 50%; background: #e53935; box-shadow: 0 0 0 2px rgba(229, 57, 53, 0.22), 0 0 8px rgba(229, 57, 53, 0.6); }
+.tab-light[data-on="1"] { background: #2fbf55; box-shadow: 0 0 0 2px rgba(47, 191, 85, 0.22), 0 0 8px rgba(47, 191, 85, 0.7); }
+.tab-light[data-on="wait"] { background: #e6be00; box-shadow: 0 0 0 2px rgba(230, 190, 0, 0.22), 0 0 8px rgba(230, 190, 0, 0.7); }
 .tab[data-color="Y"] { --w: #e6be00; } .tab[data-color="V"] { --w: var(--wV); } .tab[data-color="B"] { --w: var(--wB); }
 .tab-chip { width: 18px; height: 18px; background: var(--chip, var(--wG)); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25); }
 .tab-chip.auto { background: conic-gradient(var(--wR), var(--wO), var(--wY), var(--wG), var(--wB), var(--wI), var(--wV), var(--wR)); }
@@ -149,11 +149,9 @@ svg { overflow: visible; }
 .kicad-chip[data-state="installing"] { --b: #e6be00; }
 .kicad-chip[data-state="installing"] i { animation: blink 0.9s steps(2, start) infinite; }
 
-/* --------------------------------------------------------------------- stage */
 #stage { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--bg); transition: background 0.2s ease; }
 #canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; user-select: none; -webkit-user-select: none; display: block; }
 .grid-bg { fill: var(--bg); }
-/* The grid is drawn on a canvas under the SVG so it can stretch around the mouse. */
 #gridCanvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #dim { fill: var(--dim); opacity: 0; pointer-events: none; transition: opacity 0.18s ease; }
 #canvas.wiring.dim-on #dim { opacity: 1; }
@@ -161,9 +159,8 @@ svg { overflow: visible; }
 body.sim-running .autowire, body.sim-running .pin { pointer-events: none; }
 body.sim-running .part { cursor: pointer; }
 
-.part { cursor: grab; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.22)); }
+.part { cursor: grab; }
 .part:active { cursor: grabbing; }
-.part.selected { filter: drop-shadow(0 0 1.5px var(--accent)) drop-shadow(0 5px 8px rgba(0, 0, 0, 0.3)); }
 .gx-silk { font-family: var(--font-mono); font-weight: 600; pointer-events: none; }
 .gx-blink { animation: blink 1.6s steps(2, start) infinite; }
 @keyframes blink { to { opacity: 0.25; } }
@@ -178,7 +175,6 @@ body.sim-running .part { cursor: pointer; }
 .part-settings .ps-range { font-size: 11px; color: var(--ink-2); }
 .sel-box { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 6; pointer-events: none; }
 
-/* Name tags with the auto-wire button */
 .part-label { cursor: default; }
 .part-label .tag { fill: var(--w, var(--ink)); stroke: rgba(0, 0, 0, 0.18); stroke-width: 1; }
 .part-label text { font-size: 12px; font-weight: 700; fill: #fff; pointer-events: none; }
@@ -194,7 +190,6 @@ body.sim-running .part { cursor: pointer; }
 .cat-input { --w: var(--wB); } .cat-screens { --w: var(--wI); } .cat-motors { --w: var(--wV); } .cat-sound { --w: #7d7d86; }
 .cat-power { --w: var(--wK); } .cat-custom { --w: var(--wG); }
 
-/* Jumper wires: flat colour, thin edge only so white wires show on white. */
 .wire path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .w-edge { stroke: rgba(0, 0, 0, 0.28); stroke-width: 7.5; }
 .w-core { stroke-width: 6; }
@@ -205,10 +200,9 @@ body.sim-running .part { cursor: pointer; }
 .wire.selected .w-glow { opacity: 0.4; }
 .wire:hover .w-glow { opacity: 0.18; }
 .flow { fill: none; pointer-events: none; }
-.pulse { pointer-events: none; }
+.pulse { fill: none; pointer-events: none; stroke-linejoin: round; }
 #canvas.wiring #L-flow { opacity: 0.3; }
 
-/* Pins */
 .pin { fill: transparent; stroke: transparent; stroke-width: 2; cursor: crosshair; }
 .pin:hover { fill: rgba(30, 136, 229, 0.18); stroke: var(--accent); }
 .pin.free-end { fill: transparent; }
@@ -226,7 +220,6 @@ body.sim-running .part { cursor: pointer; }
 .pv-core.lvl-blocked { stroke: #e53935 !important; stroke-dasharray: 3 7; }
 .pv-via { fill: #fff; stroke: #333; stroke-width: 1.5; pointer-events: none; }
 
-/* ------------------------------------------------------------ canvas tools */
 .tools { position: absolute; z-index: 5; display: flex; gap: 0; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); }
 .tools-top { left: 12px; top: 12px; flex-direction: column; }
 .tools-zoom { left: 12px; bottom: 12px; align-items: center; }
@@ -236,7 +229,6 @@ body.sim-running .part { cursor: pointer; }
 .tool svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: square; }
 .stats { padding: 0 12px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
 
-/* -------------------------------------------------------------- right rail */
 #rail { position: absolute; z-index: 7; right: 12px; top: 12px; display: flex; flex-direction: column; gap: 8px; }
 #rail button {
   width: 64px; height: 60px; border: 1px solid var(--line); border-radius: 0; background: #fff;
@@ -250,14 +242,20 @@ body.sim-running .part { cursor: pointer; }
 
 #drawer {
   --lib: var(--wR);
-  position: absolute; z-index: 6; top: 12px; bottom: 12px; right: 88px; width: 370px; max-width: calc(100% - 100px);
+  position: absolute; z-index: 6; top: 12px; bottom: 12px; right: 88px; width: var(--drawer-w, 370px); max-width: calc(100% - 100px);
   background: #fff; border: 1px solid var(--line); border-top: 6px solid var(--lib); box-shadow: var(--shadow);
   display: flex; flex-direction: column; overflow: hidden;
   transform: translateX(calc(100% + 110px)); transition: transform 0.22s cubic-bezier(0.3, 0.8, 0.3, 1);
 }
 #drawer.open { transform: none; }
+#drawer[data-tab="assistant"] { border-top-color: var(--wV); }
 .drawer-close { position: absolute; right: 8px; top: 8px; z-index: 2; width: 30px; height: 30px; border: 0; border-radius: 0; background: var(--surface-2); cursor: pointer; font-size: 18px; line-height: 1; }
 .drawer-close:hover { background: #e6e6ea; }
+.drawer-grip { position: absolute; left: 0; top: 0; bottom: 0; width: 8px; z-index: 3; cursor: ew-resize; }
+.drawer-grip::after { content: ''; position: absolute; left: 2px; top: 50%; width: 3px; height: 40px; margin-top: -20px; background: var(--line); }
+.drawer-grip:hover::after, .drawer-grip.active::after { background: var(--ink-2); }
+body.resizing, body.resizing * { cursor: ew-resize !important; user-select: none; }
+body.resizing #drawer { transition: none; }
 .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .panel-title { margin: 14px 16px 10px; font-size: 18px; }
 .panel[data-panel="library"] { background: color-mix(in srgb, var(--lib) 7%, #fff); }
@@ -301,7 +299,6 @@ body.sim-running .part { cursor: pointer; }
 .custom-part label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
 .custom-part input, .custom-part select { height: 34px; padding: 0 10px; border-radius: 0; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); font-weight: 400; }
 
-/* ------------------------------------------------------------ overlays */
 .hint, .legend {
   position: absolute; z-index: 4; left: 50%; bottom: 14px; transform: translateX(-50%); max-width: calc(100% - 360px);
   padding: 8px 14px; background: #fff; box-shadow: var(--shadow); border: 1px solid var(--line);
@@ -360,13 +357,11 @@ body.sim-running .part { cursor: pointer; }
 .modal-foot { font-size: 13px; color: var(--ink-2); }
 .modal-foot code { font-family: var(--font-mono); font-size: 12px; }
 .modal-card a { color: var(--accent); }
-.modal-banner { display: block; width: calc(100% + 44px); margin: 0 -22px 16px; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .modal-actions .btn { text-decoration: none; color: inherit; }
 .modal-actions .btn.primary { color: #fff; }
 .modal-skip { margin-left: auto; align-self: center; font-size: 13px; color: var(--ink-2); background: none; border: 0; cursor: pointer; text-decoration: underline; }
 
-/* ------------------------------------------------------ live circuit problems */
 .live-issues {
   position: absolute; z-index: 9; left: 12px; bottom: 64px; width: 300px; max-height: 40%; overflow-y: auto;
   background: #fff; border: 1px solid var(--line); border-left: 5px solid var(--wR); box-shadow: var(--shadow);
@@ -383,9 +378,8 @@ body.sim-running .part { cursor: pointer; }
 .live-issues .x { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border: 0; background: transparent; cursor: pointer; font-size: 18px; line-height: 1; color: var(--ink-2); }
 @keyframes pop-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 
-/* ------------------------------------------------------------- code check */
 .code-issues {
-  position: absolute; z-index: 9; right: 470px; bottom: 64px; width: 320px; max-height: 50%; overflow-y: auto;
+  position: absolute; z-index: 9; right: calc(var(--drawer-w, 370px) + 100px); bottom: 64px; width: 320px; max-height: 50%; overflow-y: auto;
   background: #fff; border: 1px solid var(--line); border-left: 5px solid var(--wR); box-shadow: var(--shadow);
   padding: 10px 34px 12px 12px; animation: pop-in 0.22s ease-out;
 }
@@ -395,6 +389,8 @@ body.sim-running .part { cursor: pointer; }
 .code-issues .ci-status { margin: 0 0 6px; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
 .code-issues .ci-status span { font-weight: 400; color: var(--ink-2); font-size: 13px; }
 .code-issues ul { list-style: none; margin: 0; padding: 0; }
+.code-issues li[data-line] { cursor: pointer; }
+.code-issues li[data-line]:hover { background: var(--surface-2); }
 .code-issues li { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 15px; font-weight: 600; }
 .code-issues li::before { content: ''; flex: none; width: 9px; height: 9px; background: var(--wR); transform: translateY(-1px); }
 .code-issues li.warn::before { background: #e6be00; }
@@ -406,19 +402,12 @@ body.sim-running .part { cursor: pointer; }
 @keyframes spin { to { transform: rotate(360deg); } }
 #drawer:not(.open) ~ .code-issues { right: 100px; }
 
-/* --------------------------------------------- finalize intro: rainbow edges */
-@property --gx-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-#edgeGlow {
-  position: fixed; inset: 0; z-index: 250; pointer-events: none; opacity: 0; transition: opacity 0.35s ease;
-  background: conic-gradient(from var(--gx-a), #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #3f51b5, #8e24aa, #e53935);
-  -webkit-mask: linear-gradient(90deg, #000, transparent 90px, transparent calc(100% - 90px), #000), linear-gradient(180deg, #000, transparent 90px, transparent calc(100% - 90px), #000);
-  mask: linear-gradient(90deg, #000, transparent 90px, transparent calc(100% - 90px), #000), linear-gradient(180deg, #000, transparent 90px, transparent calc(100% - 90px), #000);
-  animation: gx-spin 1.4s linear infinite;
+body.fin-intro #stage { animation: bg-rainbow 0.95s linear; }
+@keyframes bg-rainbow {
+  0% { background-color: #fde3e3; } 16% { background-color: #fee9d6; } 33% { background-color: #fff6cf; }
+  50% { background-color: #dff2e1; } 66% { background-color: #dcebfb; } 83% { background-color: #e3e5f6; } 100% { background-color: #eedff3; }
 }
-body.fin-intro #edgeGlow { opacity: 0.9; }
-@keyframes gx-spin { to { --gx-a: 360deg; } }
 
-/* ---------------------------------------------------------------- finalize */
 .finalize {
   position: fixed; inset: 0; z-index: 300; display: grid; place-items: center; padding: 24px;
   background: #fff; animation: whiteout 0.25s ease-out;
@@ -448,8 +437,6 @@ body.fin-intro #edgeGlow { opacity: 0.9; }
 .fin-shop .buy { grid-row: 1 / span 2; grid-column: 3; padding: 7px 12px; background: var(--wO); color: #1d1300; font-weight: 700; font-size: 14px; }
 
 .splash { z-index: 400; }
-.splash-logo { width: min(520px, 90vw); height: auto; margin-bottom: 18px; }
-.splash-tag { margin: 0 0 30px; font-size: 20px; font-weight: 600; }
 .splash-thanks { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); }
 .splash-credits { list-style: none; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 0 0 34px; padding: 0; }
 .splash-credits li { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 14px 18px; border: 1px solid var(--line); border-top: 5px solid var(--wG); }
@@ -458,7 +445,6 @@ body.fin-intro #edgeGlow { opacity: 0.9; }
 .splash-credits b { font-size: 20px; }
 .splash-credits span { font-size: 13px; color: var(--ink-2); }
 
-/* --------------------------------------------------------------- responsive */
 @media (max-width: 1100px) {
   #topbar { height: 68px; padding: 0 10px 5px; }
   .brand { width: 48px; height: 48px; }
@@ -480,6 +466,7 @@ body.fin-intro #edgeGlow { opacity: 0.9; }
   #rail { right: 8px; top: auto; bottom: 12px; flex-direction: row; }
   #rail button { width: 58px; height: 50px; }
   #drawer { left: 8px; right: 8px; width: auto; max-width: none; top: 8px; bottom: 72px; }
+  .drawer-grip { display: none; }
   .tools-zoom { bottom: 72px; }
   .stats { display: none; }
   .legend { bottom: 72px; font-size: 11px; gap: 8px; padding: 6px 10px; }
@@ -488,3 +475,18 @@ body.fin-intro #edgeGlow { opacity: 0.9; }
 @media (prefers-reduced-motion: reduce) {
   #drawer, .toast { transition: none; }
 }
+
+.ed-head { display: flex; align-items: baseline; gap: 10px; margin: 14px 50px 8px 16px; }
+.ed-title { font-size: 18px; font-weight: 700; box-shadow: inset 0 -4px 0 var(--wV); padding-bottom: 4px; }
+.ed-sub { font-size: 12px; color: var(--ink-2); }
+.ed-label { margin: 4px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.ed-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 0 16px 12px; }
+.ed-example { height: 34px; padding: 0 10px; border: 1px solid var(--line); border-left: 5px solid var(--w); border-radius: 0; background: #fff; color: var(--ink); font-family: inherit; font-weight: 600; font-size: 13px; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ed-example:hover { background: color-mix(in srgb, var(--w) 10%, #fff); }
+.ed-example.w-R { --w: var(--wR); } .ed-example.w-Y { --w: #e6be00; } .ed-example.w-B { --w: var(--wB); } .ed-example.w-V { --w: var(--wV); }
+.ed-box { flex: 1; min-height: 0; display: flex; margin: 0 16px; border: 1px solid var(--line); background: #fbfbfd; }
+.ed-gutter, .ed-area { margin: 0; padding: 10px 0; font: 13px/19px var(--font-mono); }
+.ed-gutter { flex: none; min-width: 38px; padding-right: 8px; text-align: right; color: #a3a3ad; background: var(--surface-2); border-right: 1px solid var(--line); overflow: hidden; user-select: none; }
+.ed-area { flex: 1; min-width: 0; padding-left: 10px; border: 0; outline: 0; resize: none; background: transparent; color: var(--ink); tab-size: 2; white-space: pre; overflow: auto; }
+.ed-box:focus-within { border-color: var(--wV); }
+.ed-actions { display: flex; gap: 8px; justify-content: flex-end; margin: 10px 16px 14px; }

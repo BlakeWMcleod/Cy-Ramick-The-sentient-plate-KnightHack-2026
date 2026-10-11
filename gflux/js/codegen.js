@@ -1,18 +1,7 @@
-/* GFLUX Arduino code generator.
- *
- * GFLUX.codegen.sketch(state)    -> complete .ino text for an ESP32 (Arduino-ESP32 core 3.x)
- * GFLUX.codegen.libraries(state) -> Library Manager names the sketch needs
- * GFLUX.codegen.analyze(state)   -> the intermediate model (used by the assistant)
- *
- * Part snippets come from the `code` field of each part definition (see parts.js):
- *   [[PIN]] -> GPIO wired to the pin with that name, [[ANY]] -> first wired GPIO,
- *   [[n]]   -> instance number of the part among parts of the same type.
- */
 (function () {
   'use strict';
   const G = window.GFLUX = window.GFLUX || {};
 
-  // #include file -> Arduino Library Manager name. null = ships with the ESP32 core.
   const LIBS = {
     'Wire.h': null, 'SPI.h': null, 'SD.h': null, 'WiFi.h': null, 'WebServer.h': null, 'Preferences.h': null,
     'Adafruit_GFX.h': 'Adafruit GFX Library',
@@ -40,7 +29,6 @@
     'MAX30105.h': 'SparkFun MAX3010x Pulse and Proximity Sensor Library',
   };
 
-  /** Keep generated comments from closing early. */
   const safe = (s) => String(s == null ? '' : s).replace(/\*\//g, '* /').replace(/[\r\n]+/g, ' ');
 
   const headerName = (inc) => {
@@ -52,16 +40,13 @@
     const h = headerName(inc);
     if (!h) return null;
     if (h in LIBS) return LIBS[h];
-    // Unknown header from a custom part: best guess is the file name.
     return h.replace(/\.(h|hpp)$/i, '') + ' (check the Library Manager)';
   }
 
-  /** Pick the controller everything is generated for (the first board on the canvas). */
   function findController(state) {
     return state.parts.find((p) => { const d = G.getPart(p.type); return d && d.controller; }) || null;
   }
 
-  /** Build the intermediate model: per-part resolved snippets, wiring rows, todos, notes. */
   function analyze(state) {
     state = state || { parts: [], wires: [] };
     state = { name: state.name, parts: (state.parts || []).filter((p) => G.getPart(p.type)), wires: state.wires || [], custom: state.custom || [] };
@@ -71,7 +56,6 @@
     const ctlDef = ctl ? G.getPart(ctl.type) : null;
     const i2c = (ctlDef && ctlDef.i2c) || { SDA: 21, SCL: 22 };
 
-    // Parts in reference-designator reading order (same order as annotate()).
     const ordered = state.parts.slice().sort((a, b) => {
       const ra = refs.get(a.uid), rb = refs.get(b.uid);
       const pa = ra.replace(/\d+$/, ''), pb = rb.replace(/\d+$/, '');
@@ -81,10 +65,9 @@
     const instNo = new Map(), typeCount = {};
     for (const p of ordered) { typeCount[p.type] = (typeCount[p.type] || 0) + 1; instNo.set(p.uid, typeCount[p.type]); }
 
-    const usedGpio = new Map(); // gpio -> [ref.pin]
+    const usedGpio = new Map();
     const wiring = [], todos = [], notes = [], blocks = [];
     let serialPorts = ['Serial2', 'Serial1'];
-    // The ESP32-C3 has no Serial2: its free hardware UARTs are Serial1 and Serial0.
     const board = ordered.find((p) => G.getPart(p.type).controller);
     if (board && board.type === 'esp32c3') serialPorts = ['Serial1', 'Serial0'];
 
@@ -93,7 +76,6 @@
       const ref = refs.get(inst.uid);
       if (def.controller) continue;
 
-      // Wiring rows: every connected pin of the part.
       const rows = [];
       for (const pin of def.pins) {
         const net = nl.byPin.get(G.pinKey(inst.uid, pin.num));
@@ -120,7 +102,7 @@
       const gpioByName = (name) => {
         const pins = def.pins.filter((p) => p.name === name);
         for (const p of pins) { const g = G.gpioFor(state, nl, inst.uid, p.num); if (g != null) return g; }
-        return pins.length ? null : undefined; // undefined = no pin with that name
+        return pins.length ? null : undefined;
       };
       const anyGpio = () => {
         for (const p of def.pins) { const g = G.gpioFor(state, nl, inst.uid, p.num); if (g != null) return g; }
@@ -153,7 +135,6 @@
         setup: fill(def.code.setup),
         loop: fill(def.code.loop),
       };
-      // Two UART parts (GPS + MP3 player): give the second one Serial1.
       if (/\bSerial2\b/.test(code.setup + code.loop + code.glob)) {
         const port = serialPorts.shift() || 'Serial1';
         if (port !== 'Serial2') {
@@ -165,7 +146,6 @@
       blocks.push({ ref, def, inst, code });
     }
 
-    // Controller pin cautions for pins that are actually used.
     if (ctlDef) {
       const nameByGpio = {};
       for (const k in (ctlDef.gpio || {})) nameByGpio[ctlDef.gpio[k]] = k;
@@ -176,7 +156,6 @@
         if (users.length > 1 && !users.every((u) => /\.(SDA|SCL)$/.test(u))) notes.push(`GPIO${gpio} is shared by ${users.join(', ')}.`);
       }
     }
-    // 5 V logic warnings for well-known 5 V outputs.
     for (const w of wiring) {
       if (w.type === 'hcsr04' && w.rows.some((r) => r.pin === 'ECHO' && /^GPIO/.test(r.to)) && w.rows.some((r) => r.pin === 'VCC' && r.to === '5V')) {
         notes.push(`${w.ref} ECHO outputs 5 V. Put a 1 kOhm / 2 kOhm voltage divider on it to protect the 3.3 V GPIO.`);
@@ -202,13 +181,11 @@
     const name = safe((state && state.name) || 'My GFLUX circuit');
     const out = [];
 
-    // ------------------------------------------------------------ includes
     const incs = [];
     for (const b of a.blocks) if (b.code) incs.push(...b.code.inc.map((s) => s.trim()).filter(Boolean));
     const includes = uniq(incs);
     const libs = uniq(includes.map(libraryFor).filter(Boolean));
 
-    // ------------------------------------------------------------ header
     out.push('/*');
     out.push(` * ${name}`);
     out.push(' * Generated by GFLUX for an ESP32 (Arduino IDE, board "ESP32 Dev Module", esp32 core 3.x).');
@@ -252,7 +229,6 @@
     for (const inc of includes) out.push(inc);
     if (includes.length) out.push('');
 
-    // ------------------------------------------------------------ globals
     const noCode = [];
     for (const b of a.blocks) {
       if (!b.code) { noCode.push(b); continue; }
@@ -264,12 +240,10 @@
     for (const b of noCode) out.push(`// ${safe(b.ref)}: ${safe(b.def.name)} has no code, it just needs to be wired.`);
     if (noCode.length) out.push('');
 
-    // ------------------------------------------------------------ setup
     out.push('void setup() {');
     out.push('  Serial.begin(115200);');
     out.push('  delay(100);');
     const seen = new Set(['Serial.begin(115200);']);
-    // One Wire.begin() for every I2C part; prefer a fully wired one over a TODO.
     const wireLines = [];
     for (const b of a.blocks) if (b.code) for (const l of b.code.setup.split('\n')) if (/^\s*Wire\.begin\(/.test(l)) wireLines.push(l.trim());
     const wireBest = wireLines.find((l) => !/TODO/.test(l)) || wireLines[0];
@@ -293,7 +267,6 @@
     out.push('}');
     out.push('');
 
-    // ------------------------------------------------------------ loop
     out.push('void loop() {');
     for (const b of a.blocks) {
       if (!b.code || !b.code.loop.trim()) continue;

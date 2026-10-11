@@ -1,12 +1,4 @@
 #!/usr/bin/env python3
-"""Build the GFLUX desktop app (GFLUX.exe on Windows) with PyInstaller.
-
-    pip install pyinstaller pillow
-    python gflux/tools/build_app.py      # -> gflux/dist/GFLUX(.exe)
-
-PyInstaller builds for the OS it runs on, so the Windows .exe is built on
-Windows (the GitHub workflow .github/workflows/gflux-app.yml does this).
-"""
 import importlib.util
 import os
 import shutil
@@ -20,7 +12,6 @@ SKIP = {'tools', 'build', 'dist', '__pycache__', 'README.md'}
 
 
 def stage_site():
-    """Copy the web files (not the build tooling) into build/site."""
     site = os.path.join(BUILD, 'site')
     shutil.rmtree(site, ignore_errors=True)
     shutil.copytree(GFLUX, site, ignore=lambda d, names: [n for n in names if d == GFLUX and n in SKIP or n == '__pycache__'])
@@ -28,7 +19,6 @@ def stage_site():
 
 
 def make_icon():
-    """Draw the GFLUX jumper-wire logo as a Windows .ico (needs Pillow)."""
     try:
         from PIL import Image, ImageDraw
     except ImportError:
@@ -40,13 +30,13 @@ def make_icon():
     d.rounded_rectangle((8, 8, size - 8, size - 8), radius=52, fill=(255, 255, 255, 255), outline=(225, 221, 211, 255), width=6)
     ox, oy, w = 8, 32, int(5.5 * k)
     red = (229, 57, 53, 255)
-    P = lambda x, y: (ox + x * k, oy + y * k)  # noqa: E731  (logo path is in a 40x32 box)
+    P = lambda x, y: (ox + x * k, oy + y * k)
     d.line([P(5, 27), P(5, 13)], fill=red, width=w)
     d.arc([P(5, 6), P(19, 20)], 180, 360, fill=red, width=w)
     d.line([P(19, 13), P(19, 19)], fill=red, width=w)
     d.arc([P(19, 12), P(33, 26)], 0, 180, fill=red, width=w)
     d.line([P(33, 19), P(33, 5)], fill=red, width=w)
-    for x, y in ((5, 27), (33, 5)):  # silver stripped wire tips
+    for x, y in ((5, 27), (33, 5)):
         cx, cy = P(x, y)
         d.ellipse((cx - w * 0.55, cy - w * 0.55, cx + w * 0.55, cy + w * 0.55), fill=(207, 211, 216, 255), outline=(140, 145, 150, 255), width=3)
     path = os.path.join(BUILD, 'gflux.ico')
@@ -69,7 +59,6 @@ def main():
     ]
     if icon and sys.platform == 'win32':
         args += ['--icon', icon]
-    # The "Locate KiCad" file picker uses tkinter; it is imported lazily, so name it.
     if importlib.util.find_spec('tkinter'):
         args += ['--hidden-import', 'tkinter', '--hidden-import', 'tkinter.filedialog']
     else:

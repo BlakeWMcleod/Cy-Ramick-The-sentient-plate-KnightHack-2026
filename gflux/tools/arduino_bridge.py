@@ -1,16 +1,3 @@
-"""GFLUX code checking with the real Arduino compiler (arduino-cli).
-
-Used by kicad_bridge.py's HTTP server:
-
-    GET  /api/arduino/health  -> {ok, cli, version, source, esp32, problem, setup}
-    POST /api/arduino/check   {code, fqbn?} -> {ok, issues: [{line, col, level, msg}], needs: {core, headers}}
-    POST /api/arduino/setup   {libs?: [...]} -> start installing arduino-cli / ESP32 support / libraries
-    GET  /api/arduino/setup   -> setup status {state, message, step}
-
-arduino-cli is found in this order: the path saved by GFLUX, ARDUINO_CLI, PATH,
-the copy bundled inside Arduino IDE 2, common install folders, and finally a
-copy GFLUX downloaded itself from downloads.arduino.cc.
-"""
 import glob
 import io
 import json
@@ -33,19 +20,17 @@ ESP32_INDEX = 'https://espressif.github.io/arduino-esp32/package_esp32_index.jso
 DOWNLOADS = 'https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_%s'
 EXE = 'arduino-cli.exe' if sys.platform == 'win32' else 'arduino-cli'
 
-_lock = threading.Lock()        # one compile / setup step at a time
+_lock = threading.Lock()
 _cache = {'info': None}
 _setup = {'state': 'idle', 'message': '', 'step': ''}
 _setup_lock = threading.Lock()
 
 
 def gflux_home():
-    """Folder for GFLUX's own downloads and build cache (next to its config file)."""
     return os.path.dirname(kb.config_path())
 
 
 def ide_config():
-    """Arduino IDE 2 keeps its arduino-cli settings here; reuse them so we see the same boards and libraries."""
     path = os.path.join(os.path.expanduser('~'), '.arduinoIDE', 'arduino-cli.yaml')
     return path if os.path.isfile(path) else None
 
@@ -117,19 +102,57 @@ def find_arduino(refresh=False):
     return info
 
 
-def health():
-    info = dict(find_arduino())
+def find_ide():
+    if sys.platform == 'win32':
+        for base in (os.environ.get('LOCALAPPDATA', ''), os.environ.get('ProgramFiles', ''), os.environ.get('ProgramFiles(x86)', '')):
+            for rel in (os.path.join('Programs', 'Arduino IDE', 'Arduino IDE.exe'), os.path.join('Arduino IDE', 'Arduino IDE.exe'), os.path.join('Arduino', 'arduino.exe')):
+                path = os.path.join(base, rel)
+                if base and os.path.isfile(path):
+                    return [path]
+    elif sys.platform == 'darwin':
+        for app in ('/Applications/Arduino IDE.app', os.path.expanduser('~/Applications/Arduino IDE.app'), '/Applications/Arduino.app'):
+            if os.path.isdir(app):
+                return ['open', '-a', app]
+    else:
+        for name in ('arduino-ide', 'arduino'):
+            path = shutil.which(name)
+            if path:
+                return [path]
+    return None
+
+
+def health(refresh=False):
+    info = dict(find_arduino(refresh))
+    ide = find_ide()
+    info['ide'] = ide[-1] if ide else None
     info['setup'] = setup_status()
     return info
 
 
-# ------------------------------------------------------------------- checking
+def open_sketch(name, code):
+    name = kb.safe_name(name)
+    if not isinstance(code, str) or not code.strip():
+        raise ValueError('missing code')
+    folder = os.path.join(kb.documents_dir(), name, name)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name + '.ino')
+    kb.write(path, code)
+    ide = find_ide()
+    if ide:
+        kb.launch(ide + [path])
+        return {'ok': True, 'path': path, 'opened': 'Arduino IDE'}
+    if not os.environ.get('GFLUX_NO_LAUNCH'):
+        if sys.platform == 'win32':
+            os.startfile(path)
+        else:
+            kb.launch(['open' if sys.platform == 'darwin' else 'xdg-open', path])
+    return {'ok': True, 'path': path, 'opened': 'default app', 'note': 'Arduino IDE not found, so it opened with your default app.'}
+
 
 LINE = re.compile(r'gflux_check\.ino:(\d+):(?:(\d+):)?\s*(fatal error|error|warning):\s*(.*)')
 
 
 def parse_output(text):
-    """Compiler output -> issues (line numbers are the user's lines)."""
     issues, headers, seen = [], [], set()
     for raw in text.splitlines():
         m = LINE.search(raw)
@@ -159,7 +182,6 @@ def compile_sketch(code, fqbn='esp32:esp32:esp32'):
             sketch = os.path.join(tmp, 'gflux_check')
             os.makedirs(sketch)
             kb.write(os.path.join(sketch, 'gflux_check.ino'), code)
-            # Reusing the build folder makes every check after the first much faster.
             build = os.path.join(gflux_home(), 'build', re.sub(r'\W+', '_', fqbn))
             os.makedirs(build, exist_ok=True)
             t0 = time.time()
@@ -176,15 +198,12 @@ def compile_sketch(code, fqbn='esp32:esp32:esp32'):
     return res
 
 
-# --------------------------------------------------------------------- setup
-
 def setup_status():
     with _setup_lock:
         return dict(_setup)
 
 
 def _download_cli():
-    """Fetch the official arduino-cli into GFLUX's folder. Returns its path."""
     machine = _platform.machine().lower()
     if sys.platform == 'win32':
         name = 'Windows_64bit.zip'
@@ -208,7 +227,6 @@ def _download_cli():
 
 
 def start_setup(libs=None):
-    """Install whatever is missing for code checks: arduino-cli, ESP32 support, libraries."""
     libs = [l for l in (libs or []) if isinstance(l, str) and re.fullmatch(r"[\w .+\-()]{1,80}", l)]
     with _setup_lock:
         if _setup['state'] == 'running':
@@ -241,7 +259,7 @@ def start_setup(libs=None):
             find_arduino(refresh=True)
             with _setup_lock:
                 _setup.update(state='done', step='done', message='Arduino is ready for code checks.')
-        except Exception as e:  # report, don't crash the server
+        except Exception as e:
             with _setup_lock:
                 _setup.update(state='failed', step='failed', message=str(e) or type(e).__name__)
 

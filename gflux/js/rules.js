@@ -1,14 +1,9 @@
-/* GFLUX wiring rules: which pins a new wire may go to without breaking
- * anything, and which way current flows along each wire (for animation). */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.rules = (function () {
-  // Module pins the ESP32 drives (so input-only GPIOs can't serve them).
   const DRIVEN = /^(TRIG|IN|IN\d|DIN|CS|CLK|SCK|MOSI|RST|SCL|R|G|B|ENA|ENB|LRC|BCLK|RX|XSHUT|SIG|SD)$/;
-  // Module pins that send data to the ESP32.
   const OUTPUTS = /^(ECHO|OUT|DO|AO|AOUT|TX|DT|VRX|VRY|SW|MISO|INT|SQW|BUSY|DOUT|GPIO1|IRQ|DATA|32K)$/;
   const POSITIVE = (rail) => rail && rail !== 'GND';
-  // Two-pin parts that conduct straight through (for tracing current).
   const CONDUCTORS = { resistor: [['1', '2']], led: [['1', '2']], button: [['1', '2']], dcmotor: [['1', '2']], speaker: [['1', '2']], slideswitch: [['2', '1'], ['2', '3']] };
 
   function info(state, uid, num) {
@@ -19,14 +14,11 @@ GFLUX.rules = (function () {
     return { inst, def, pin, role, label: `${def.name} ${pin.name}` };
   }
 
-  /** All pins electrically joined to `ref` (including itself). */
   function members(state, nl, ref) {
     const net = nl.byPin.get(GFLUX.pinKey(ref.uid, ref.pin));
     return net ? net.pins : [{ uid: ref.uid, pin: ref.pin }];
   }
 
-  /** How safe is a wire from pin `a` to pin `b`?
-   *  -> { level: 'good' | 'ok' | 'caution' | 'blocked', reason } */
   function check(state, nl, a, b) {
     if (a.uid === b.uid && a.pin === b.pin) return { level: 'blocked', reason: 'Same pin' };
     const na = nl.byPin.get(GFLUX.pinKey(a.uid, a.pin));
@@ -40,7 +32,6 @@ GFLUX.rules = (function () {
     const powerIns = all.filter((m) => !m.def.passive && !m.role.source && (m.pin.kind === 'v5' || m.pin.kind === 'v3'));
 
     if (rails.has('GND') && positives.length) return { level: 'blocked', reason: `Short circuit! ${positives[0]} would connect straight to GND` };
-    // Supplies on the joined net. Soft supplies (ESP32 VIN) become inputs when something else feeds them.
     const supplies = all.filter((m) => m.role.source && POSITIVE(m.role.rail)).map((m) => ({ m, v: GFLUX.railVoltage(m.inst, m.pin.name) }));
     const hard = supplies.filter((x) => !x.m.role.soft);
     const live = hard.length ? hard : supplies;
@@ -49,7 +40,6 @@ GFLUX.rules = (function () {
     if (volts.length > 1) return { level: 'blocked', reason: `${fmt(volts[0])} and ${fmt(volts[1])} supplies would fight` };
     if (gpios.length && rails.size) return { level: 'blocked', reason: `${gpios[0].pin.name} would be tied to ${Array.from(rails)[0]}; the pin could burn out` };
     if (powerIns.length && rails.has('GND')) return { level: 'blocked', reason: `${powerIns[0].label} is a power pin; wiring it to GND does nothing` };
-    // Is the supply voltage inside what each powered part accepts?
     const v = volts.length === 1 ? volts[0] : null;
     if (v != null) {
       for (const m of all) {
@@ -73,7 +63,6 @@ GFLUX.rules = (function () {
     const sigOnRail = all.find((m) => !m.def.passive && m.pin.kind === 'sig' && !m.role.controller);
     if (sigOnRail && rails.size) return { level: 'caution', reason: `${sigOnRail.label} is a signal pin tied to ${Array.from(rails)[0]}` };
 
-    // Good matches: power to supply, ground to ground, signal to GPIO.
     const pair = [A, B];
     const has = (fn) => pair.some(fn);
     if (has((m) => m.role.source)) {
@@ -93,8 +82,6 @@ GFLUX.rules = (function () {
     return { level: 'ok', reason: 'Connects' };
   }
 
-  /** Current direction per wire.
-   *  -> Map(wireId -> { kind: 'power' | 'ground' | 'signal', dir: 1 (a->b) | -1 | 0 }) */
   function flow(state) {
     const nl = GFLUX.buildNets(state);
     const adj = new Map();
@@ -107,7 +94,6 @@ GFLUX.rules = (function () {
     for (const inst of state.parts) {
       for (const [p, q] of CONDUCTORS[inst.type] || []) link(GFLUX.pinKey(inst.uid, p), GFLUX.pinKey(inst.uid, q), null);
     }
-    // Sources: positive supplies, plus whichever end drives each signal net.
     const sources = [], grounds = [];
     const byUid = new Map(state.parts.map((p) => [p.uid, p]));
     for (const net of nl.nets) {

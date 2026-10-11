@@ -4,20 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GFLUX Circuit Builder</title>
-  <meta name="description" content="GFLUX: a beginner-friendly ESP32 circuit builder with real parts, safe wiring, KiCad export and an AI coding assistant.">
+  <meta name="description" content="GFLUX: a beginner-friendly ESP32 circuit builder with real parts, safe wiring, KiCad export and an Arduino code editor.">
   <link rel="icon" type="image/png" href="img/favicon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap">
   <style>
-    /* Until css/gflux.css and the scripts load, show only a plain notice. If
-       index.html is opened without its folder, that's all anyone sees. */
     html:not(.gx-ready) body > :not(#loadError) { display: none !important; }
     #loadError { font: 16px/1.55 system-ui, sans-serif; max-width: 560px; margin: 12vh auto; padding: 28px; background: #fff; color: #222; border: 2px solid #222; }
     #loadError b { color: #e53935; }
   </style>
   <link rel="stylesheet" href="css/gflux.css">
-  <link rel="stylesheet" href="css/assistant.css">
 </head>
 <body>
   <div id="loadError" role="alert">
@@ -47,7 +44,7 @@
       </div>
 
       <div class="tab" data-menu="kicad" data-color="G">
-        <button class="tab-btn" aria-haspopup="true" aria-expanded="false">KiCad</button>
+        <button class="tab-btn" aria-haspopup="true" aria-expanded="false"><i class="tab-light" id="kicadLight" aria-hidden="true"></i>KiCad</button>
         <div class="menu menu-wide" role="menu" hidden>
           <div class="menu-status" id="kicadStatus"><i></i><span>Checking…</span></div>
           <button role="menuitem" data-act="sch"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 3 10 2-5h7"/></svg>Create schematic</button>
@@ -57,6 +54,19 @@
           <button role="menuitem" data-act="recheck" class="needs-app"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>Check for KiCad again</button>
           <button role="menuitem" data-act="locate" class="needs-app"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>Locate KiCad on this computer…</button>
           <button role="menuitem" data-act="install" class="needs-app"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/></svg>Install KiCad</button>
+        </div>
+      </div>
+
+      <div class="tab" data-menu="arduino" data-color="T">
+        <button class="tab-btn" aria-haspopup="true" aria-expanded="false"><i class="tab-light" id="arduinoLight" aria-hidden="true"></i>Arduino IDE</button>
+        <div class="menu menu-wide" role="menu" hidden>
+          <div class="menu-status" id="arduinoStatus"><i></i><span>Checking…</span></div>
+          <button role="menuitem" data-act="ardcheck"><svg viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></svg>Check my code</button>
+          <button role="menuitem" data-act="ardopen" class="needs-app"><svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6"/></svg>Open in Arduino IDE</button>
+          <button role="menuitem" data-act="ardino"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/></svg>Download sketch (.ino)</button>
+          <hr>
+          <button role="menuitem" data-act="ardrecheck" class="needs-app"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg>Check for Arduino again</button>
+          <button role="menuitem" data-act="ardsetup" class="needs-app"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/></svg>Set up Arduino &amp; ESP32 support</button>
         </div>
       </div>
 
@@ -104,12 +114,9 @@
 
     <button class="finalize-btn" id="btnFinalize" data-act="finalize"><svg viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></svg>Finalize</button>
   </header>
-  <div id="edgeGlow" aria-hidden="true"></div>
   <div id="finalize" class="finalize" hidden role="dialog" aria-modal="true" aria-label="Finalize"></div>
   <div id="splash" class="finalize splash" hidden role="dialog" aria-modal="true" aria-label="Welcome to GFLUX">
     <div class="fin-card">
-      <img class="splash-logo" src="img/banner.png" alt="GFLUX">
-      <p class="splash-tag">Build circuits. Watch the current flow. Make it real.</p>
       <p class="splash-thanks">Made possible with thanks to</p>
       <ul class="splash-credits">
         <li><b>KiCad</b><span>schematics &amp; PCBs</span></li>
@@ -154,10 +161,11 @@
 
     <nav id="rail" aria-label="Side panels">
       <button data-tab="library" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7"/><rect x="13" y="4" width="8" height="7"/><rect x="3" y="13" width="8" height="7"/><rect x="13" y="13" width="8" height="7"/></svg><span>Library</span></button>
-      <button data-tab="assistant" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg><span>Code</span></button>
+      <button data-tab="assistant" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M8 7 3 12l5 5M16 7l5 5-5 5M14 4l-4 16"/></svg><span>Code</span></button>
     </nav>
 
     <aside id="drawer" data-tab="library" aria-label="Side panel">
+      <div class="drawer-grip" id="drawerGrip" role="separator" aria-orientation="vertical" aria-label="Resize panel"></div>
       <button class="drawer-close" id="drawerClose" aria-label="Close panel">×</button>
       <section class="panel" data-panel="library">
         <h2 class="panel-title">Parts bin</h2>
@@ -184,7 +192,6 @@
       </section>
     </aside>
 
-    <div id="hint" class="hint">Drag from a <b>pin</b> to wire · <b>⚡</b> auto-wires a part · <kbd>R</kbd> rotate · <kbd>Del</kbd> delete</div>
     <div id="legend" class="legend" hidden>
       <span class="lg good">Good match</span><span class="lg ok">Works</span><span class="lg caution">Careful</span><span class="lg blocked">Would break something</span><span class="lg-esc"><kbd>Esc</kbd> cancel</span>
     </div>
@@ -210,7 +217,7 @@
   <script src="js/autowire.js"></script>
   <script src="js/check.js"></script>
   <script src="js/codecheck.js"></script>
-  <script src="js/assistant.js"></script>
+  <script src="js/editor.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
