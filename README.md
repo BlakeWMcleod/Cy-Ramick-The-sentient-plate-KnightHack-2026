@@ -47,7 +47,7 @@ The **KiCad** menu offers:
 - **Download KiCad project:** a `.zip` with the project, schematic, board and generated `.ino` sketch
 - **Check again / Locate / Install:** ask the app to find KiCad, point it at your install, or install KiCad for you
 
-**PLEASE NOTE THIS USES CODE FROM KICAD; I DIDNT DO THIS PLEASE GIVE THANKS TO THE KICAD DEV TEAM**
+**PLEASE NOTE THIS USES CODE FROM KICAD; I DID NOT DO THIS PLEASE GIVE THANKS TO THE KICAD DEV TEAM**
 
 ## Parts library
  50 modules you can buy on Amazon, each with a plain name and its real pinout:
