@@ -1,20 +1,20 @@
 <p align="center"><img src="gflux/img/banner.png" alt="GFLUX" width="520"></p>
 
-# GFLUX
+!# GFLUX
+GFLUX is a beginner-friendly circuit builder for Basic board projects. Drop real popular modules into a grid, connect them with wires (or make us do it)
+GFLUX checks the wiring as you go. It shows current moving through each wire and turns your circuit into KiCad files.
 
-GFLUX is a beginner-friendly circuit builder for ESP32 projects. Drop real hobby modules onto a grid, connect them with jumper wires, and GFLUX checks the wiring as you go. It shows current moving through each wire and turns your circuit into KiCad files and ready-to-upload Arduino code.
+Big thanks to Kicad, this project was designed to be a more begginer friendly version as part of a UCF Hackathon!
 
-## Get started
+## Get started - Hello Judges!
 
 1. Download **GFLUX-Windows.exe** from **[Releases → GFLUX (latest build)](https://github.com/BlakeWMcleod/Cy-Ramick-The-sentient-plate-KnightHack-2026/releases/tag/gflux-latest)**. macOS and Linux builds are on the same page.
 2. Double-click it. GFLUX opens in your browser.
-3. The app looks for KiCad on your computer. If KiCad isn't there, it offers to **install** it, or to **locate** an install it couldn't find.
+3.It should Find or Install Kicad if you don't own it
 
-Keep the small console window open while you work. Closing it quits GFLUX.
+Keep the small window open while you work.
 
-> The app isn't code-signed. On Windows, click **More info → Run anyway** the first time. On macOS, right-click it and choose **Open**.
-
-Opening `gflux/index.html` directly also works, but without KiCad PDFs or Gerbers. The page asks you to use the app instead.
+Opening `gflux/index.html` Does **NOT** Work as intended, sorry hackers
 
 ## Using GFLUX
 
@@ -22,44 +22,23 @@ Opening `gflux/index.html` directly also works, but without KiCad PDFs or Gerber
 | --- | --- |
 | Add a part | Open **Library** on the right, then click a part or drag it onto the grid |
 | See a part's full name and where to buy it | Hover over its name tag |
-| Wire a part automatically | Click the **⚡** next to its name. Power, ground and the right ESP32 pins are wired for you |
+| Wire a part automatically | Click the **Power** next to its name. Power, ground and the right ESP32 pins are wired for you |
 | Wire by hand | Drag from one pin to another. Let go on empty grid to leave the end loose, or click a pin and then click the grid to add bends |
 | Rotate / delete | Select, then press <kbd>R</kbd> / <kbd>Del</kbd>, or use the tools on the left |
 | Undo / redo | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
 | Save / open | **File** menu. Work also autosaves in your browser |
+| Finilise | Checks your work to find any Errors |
 
 ### Safe wiring
 
-While you drag a wire, the screen dims and every pin is marked:
-
-| Mark | Meaning |
-| --- | --- |
-| **Green** | Good match: power to a supply, ground to ground, signal to a GPIO, or the default I2C pins |
-| **Blue** | Works |
-| **Yellow** | Works, but be careful: strapping pins, input-only pins, or powering a module from a GPIO |
-| **Red dashed** | Blocked, because it would short a supply to GND, join two supplies, tie a GPIO to power, or put 5 V on a 3.3 V-only part |
-
 Wiring an LED straight to a GPIO or a supply automatically adds a 220 Ω resistor. You can turn that off in the **Wire color** menu.
+This program should detect short circuits, but may not supply step up converters
 
 ### Wire colours
 
-With **Auto** selected, each wire takes the colour printed on the ESP32 pin it connects to:
-
-- **Signal pins:** cycle through red, orange, yellow, green, blue, indigo and violet down the header
+- **Signal pins:** crimson red, orange, yellow, green, blue, indigo and violet 
 - **Power:** red
 - **Ground:** black
-
-The **Wire color** menu also has the nine jumper colours, a custom colour picker, and **Auto-color all wires**.
-
-### Animation
-
-Moving dashes show the way current flows, treating the ESP32 as the power source:
-
-- **Yellow:** power leaving a supply
-- **White:** current returning to ground
-- **Blue:** signals between the ESP32 and each module
-
-In the **Animation** menu you can change the speed, spacing, size and style (dashes, dots or pulses), and choose which kinds of wire are animated.
 
 ### KiCad
 
@@ -70,16 +49,10 @@ The **KiCad** menu offers:
 - **Download KiCad project:** a `.zip` with the project, schematic, board and generated `.ino` sketch
 - **Check again / Locate / Install:** ask the app to find KiCad, point it at your install, or install KiCad for you
 
-### Code AI
-
-The **Code AI** panel on the right writes ESP32 Arduino code for your circuit:
-
-- **Starter code** works offline and uses the pins you actually wired.
-- For free-form requests ("beep when something is closer than 10 cm"), add an [Anthropic API key](https://console.anthropic.com/settings/keys) under **AI settings**. The key stays in your browser.
+**PLEASE NOTE THIS USES CODE FROM KICAD; I DIDNT DO THIS PLEASE GIVE THANKS TO THE KICAD DEV TEAM**
 
 ## Parts library
-
-About 50 modules you can buy on Amazon, each with a plain name (for example "Distance sensor" instead of "HC-SR04 Ultrasonic Distance Sensor Module") and its real pinout:
+ 50 modules you can buy on Amazon, each with a plain name and its real pinout:
 
 - **Boards:** ESP32 DevKit V1, ESP32-C3 SuperMini
 - **Basics:** resistor, push button, slide switch, knob
@@ -90,8 +63,8 @@ About 50 modules you can buy on Amazon, each with a plain name (for example "Dis
 - **Motors:** servo, DC motor and driver, stepper, relay, vibration
 - **Sound & storage:** buzzer, speaker and amp, MP3 player, SD card, clock module
 - **Power:** battery pack, charger, regulator, breadboard supply
-
-You can also add your own parts from the bottom of the library.
+-**More**
+You can also add your own parts from the bottom of the library, please note if creating a G pin it connect to ground and not to green.
 
 ## For developers
 
@@ -103,18 +76,6 @@ pip install pyinstaller pillow
 python gflux/tools/build_app.py          # build the app (GFLUX.exe on Windows)
 python3 -m unittest discover gflux/tools/tests -v
 ```
-
-Every push that changes `gflux/` rebuilds the Windows, macOS and Linux apps (`.github/workflows/gflux-app.yml`) and updates the release.
-
-| Path | What it does |
-| --- | --- |
-| `gflux/index.html`, `gflux/css/` | Page layout and styles |
-| `gflux/js/parts.js` | Parts library: pinouts, plain names, Amazon searches, code snippets |
-| `gflux/js/netlist.js`, `gflux/js/rules.js` | Circuit model, wiring safety rules and current-flow directions |
-| `gflux/js/autowire.js` | One-click auto-wiring |
-| `gflux/js/app.js`, `gflux/js/art.js` | Editor, wire router and part artwork |
-| `gflux/js/kicad.js` | KiCad schematic, PCB and project writers |
-| `gflux/js/codegen.js`, `gflux/js/assistant.js` | Starter code and the Code AI panel |
+|
 | `gflux/tools/` | Desktop app, KiCad bridge, build script and tests |
-
-The ESP32 firmware for the sentient plate lives in [`firmware/`](firmware/README.md).
+(firmware/README.md).
