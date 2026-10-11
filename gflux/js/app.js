@@ -366,6 +366,29 @@
     $('#libList').innerHTML = html || `<p class="empty">No parts match “${esc(q)}”. Try “sensor”, “screen” or “motor”, or create your own below.</p>`;
   }
 
+  /** Nearest spot to (x, y) where a new part won't overlap existing ones,
+   *  preferring the right-hand side (the drawer covers the left). */
+  function freeSpot(def, x, y) {
+    const boxes = state.parts.map((p) => GFLUX.partBox(p));
+    const fits = (px, py) => boxes.every((b) => px + def.w + 3 < b.x || px > b.x + b.w + 3 || py + def.h + 4 < b.y || py > b.y + b.h + 4);
+    const cands = [];
+    for (let dx = -60; dx <= 60; dx += 2) for (let dy = -40; dy <= 40; dy += 2) cands.push([dx, dy, Math.abs(dx) + Math.abs(dy) * 2.2 + (dx < 0 ? 14 : 0)]);
+    cands.sort((a, b) => a[2] - b[2]);
+    for (const [dx, dy] of cands) if (fits(x + dx, y + dy)) return { x: x + dx, y: y + dy };
+    return { x, y };
+  }
+
+  /** Pan so a part is fully visible beside the drawer. */
+  function ensureVisible(inst) {
+    const r = svg.getBoundingClientRect(), b = GFLUX.partBox(inst);
+    const left = $('#drawer').classList.contains('open') && r.width > 900 ? $('#drawer').offsetWidth + 100 : 80;
+    const sx0 = (b.x - 2) * G * view.k + view.x, sx1 = (b.x + b.w + 2) * G * view.k + view.x;
+    const sy0 = (b.y - 3) * G * view.k + view.y, sy1 = (b.y + b.h + 3) * G * view.k + view.y;
+    if (sx0 >= left && sx1 <= r.width - 60 && sy0 >= 10 && sy1 <= r.height - 60) return;
+    view.x += (left + (r.width - 60 - left) / 2) - (sx0 + sx1) / 2;
+    view.y += r.height / 2 - (sy0 + sy1) / 2;
+  }
+
   function addPart(type, at) {
     const def = GFLUX.getPart(type);
     if (!def) return;
@@ -374,15 +397,13 @@
     if (!pos) {
       const r = svg.getBoundingClientRect();
       const c = screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
-      pos = { x: c.x - def.w / 2, y: c.y - def.h / 2 };
-      // Nudge so repeated adds don't stack exactly.
-      const n = state.parts.filter((p) => p.type === type).length;
-      pos.x += n * 2; pos.y += n * 2;
+      pos = freeSpot(def, Math.round(c.x - def.w / 2), Math.round(c.y - def.h / 2));
     }
     const inst = { uid: newId('p'), type, x: Math.round(pos.x), y: Math.round(pos.y), rot: 0 };
     if (def.custom) state.custom = Array.from(new Map(state.custom.concat([stripDef(def)]).map((p) => [p.id, p])).values());
     state.parts.push(inst);
     sel = { kind: 'part', id: inst.uid };
+    if (!at) ensureVisible(inst);
     changed();
     toast(`Added ${def.name}. Drag from its pins to wire it up.`);
   }

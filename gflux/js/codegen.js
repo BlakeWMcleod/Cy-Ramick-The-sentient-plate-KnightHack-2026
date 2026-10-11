@@ -25,7 +25,7 @@
     'IRremote.hpp': 'IRremote',
     'MFRC522.h': 'MFRC522',
     'Adafruit_NeoPixel.h': 'Adafruit NeoPixel',
-    'LedControl.h': 'LedControl',
+    'MD_MAX72xx.h': 'MD_MAX72XX',
     'HX711.h': 'HX711 Arduino Library',
     'TinyGPSPlus.h': 'TinyGPSPlus',
     'TinyGPS++.h': 'TinyGPSPlus',

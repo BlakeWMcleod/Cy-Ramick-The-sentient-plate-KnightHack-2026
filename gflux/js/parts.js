@@ -161,10 +161,10 @@ GFLUX.PARTS = [
     board: PCB.blue, art: 'matrix', w: 8, h: 8, pins: { left: ['VCC', 'GND', 'DIN', 'CS', 'CLK'] },
     tip: 'Draw pixels, icons or scrolling text on 64 red LEDs.',
     code: {
-      inc: ['#include <LedControl.h>'],
-      glob: 'LedControl matrix[[n]]([[DIN]], [[CLK]], [[CS]], 1);',
-      setup: 'matrix[[n]].shutdown(0, false); matrix[[n]].setIntensity(0, 4); matrix[[n]].clearDisplay(0);',
-      loop: 'matrix[[n]].setLed(0, (millis() / 200) % 8, (millis() / 1600) % 8, true);',
+      inc: ['#include <MD_MAX72xx.h>'],
+      glob: 'MD_MAX72XX matrix[[n]](MD_MAX72XX::GENERIC_HW, [[DIN]], [[CLK]], [[CS]], 1);',
+      setup: 'matrix[[n]].begin(); matrix[[n]].control(MD_MAX72XX::INTENSITY, 4); matrix[[n]].clear();',
+      loop: 'matrix[[n]].setPoint((millis() / 1600) % 8, (millis() / 200) % 8, true);',
     },
   },
 
