@@ -36,6 +36,31 @@ Switch the plate on while it rests flat on the table. At boot, the firmware reco
 
 Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … inside each numbered folder (not the `/mp3` folder), and copy them in order. Install the **DFRobotDFPlayerMini** library from the Arduino Library Manager before compiling.
 
+## Hardware self-test (`firmware/plate_selftest/plate_selftest.ino`)
+
+Upload this sketch to check every part before installing the main firmware. Copy `Beep.mp3` and then `Metal Beep.mp3`, in that order, to the root of an empty SD card. The DFPlayer numbers root files by copy order.
+
+1. Set the plate flat on the table and switch it on.
+2. **Two beeps:** pick the plate up, tilt it onto its side, and set it back down within 15 s.
+3. **Two beeps:** press button 1. **Two beeps:** press button 2. One beep confirms each step.
+4. **One beep and a steady blue LED:** everything passed. Otherwise each failure plays **metal beeps** for the error code, followed by normal beeps for the sensor or button number.
+5. Press either button afterwards to hear the result again.
+
+| Code | Problem | Check |
+| --- | --- | --- |
+| 1 | DFPlayer not responding (LED blinks only) | DFPlayer TX/RX wires and power (D2) |
+| 2 | SD card unreadable or fewer than 2 files | FAT32, 32 GB or smaller, both MP3s copied |
+| 3 | DFPlayer BUSY wire | DFPlayer pin 16 to GPIO4 |
+| 4 | MPU-6050 not found | SDA GPIO21, SCL GPIO22, 3V3, GND |
+| 5 | MPU-6050 bad data: .1 gravity wrong, .2 frozen, .3 no tilt seen | Wiring, or a damaged module |
+| 6.n | IR sensor *n* wire disconnected | DO wire to its GPIO |
+| 7.n | IR sensor *n* did not react when lifted | VCC/GND, or turn its trimpot |
+| 8.n | Button *n* stuck pressed | Shorted to GND |
+| 9.n | Button *n* not pressed during the test | Wiring, or not installed yet |
+| 10 | Last restart was a brownout | Weak batteries or power wiring (D1, VIN) |
+
+Results are saved in the ESP32's flash. The previous report is printed on Serial (115200 baud) at every start, and holding button 1 while switching on replays it without re-testing.
+
 ## Enclosure (`enclosure/`)
 
 `make_enclosure.py` generates the round 3D-printed tray and lid (140 mm across, 24.3 mm tall) that sit under the plate, along with stand-in blocks for every component. All dimensions are parameters at the top of the script.
