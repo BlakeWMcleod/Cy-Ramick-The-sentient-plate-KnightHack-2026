@@ -1216,7 +1216,7 @@
   /** Opened straight from index.html (not through the GFLUX app): ask to use the app. */
   function showGate() {
     if (session.get('gflux.gateSkip')) return;
-    showModal(`<img class="modal-banner" src="img/banner.png" alt="GFLUX">
+    showModal(`<div class="modal-wires" aria-hidden="true">${GFLUX.COLORS.map((c) => `<i class="w-${c.key}"></i>`).join('')}</div>
       <h2>Open GFLUX with the app</h2>
       <p>GFLUX is meant to run through the <b>GFLUX app</b>. The app opens this editor for you, finds KiCad on your computer (or installs it), and turns <b>Schematic</b> and <b>PCB</b> into real KiCad files, PDFs and Gerbers.</p>
       <div class="modal-actions">

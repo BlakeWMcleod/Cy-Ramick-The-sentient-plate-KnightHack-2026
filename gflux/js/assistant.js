@@ -192,7 +192,7 @@
     // -- messages
     const list = el('div', { class: 'gx-as-list', role: 'log', 'aria-live': 'polite' });
     const intro = el('div', { class: 'gx-msg gx-msg-ai gx-msg-intro' }, [
-      el('div', { class: 'gx-bubble', html: renderMarkdown('Describe what you want your circuit to do and I\'ll write the ESP32 code.\n\nTap **Starter code** for a sketch that tests every part on your canvas, no AI needed.') }),
+      el('div', { class: 'gx-bubble', html: renderMarkdown('Pick an **example** above, or tap **Starter code** for a sketch that tests every part on your canvas.\n\n**Check my code** finds mistakes before you upload.') }),
     ]);
     list.append(intro);
 
@@ -206,8 +206,7 @@
     const sendBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-send', text: 'Send' });
     const stopBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-stop', text: 'Stop', hidden: true });
     const composer = el('div', { class: 'gx-as-compose' }, [
-      input,
-      el('div', { class: 'gx-as-actions' }, [starterBtn, checkBtn, el('span', { class: 'gx-spacer' }), stopBtn, sendBtn]),
+      el('div', { class: 'gx-as-actions' }, [starterBtn, checkBtn]),
     ]);
 
     // Four ready-made example projects: circuit + sketch.
@@ -217,7 +216,7 @@
 
     root.append(
       el('div', { class: 'gx-as-head' }, [el('span', { class: 'gx-as-title', text: 'Code' }), el('span', { class: 'gx-as-sub', text: 'write, check & learn' })]),
-      examples, settings, list, chips, composer,
+      examples, list, composer,
     );
     updateStatus();
 

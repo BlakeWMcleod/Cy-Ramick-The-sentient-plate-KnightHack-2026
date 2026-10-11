@@ -360,7 +360,6 @@ body.sim-running .part { cursor: pointer; }
 .modal-foot { font-size: 13px; color: var(--ink-2); }
 .modal-foot code { font-family: var(--font-mono); font-size: 12px; }
 .modal-card a { color: var(--accent); }
-.modal-banner { display: block; width: calc(100% + 44px); margin: 0 -22px 16px; }
 .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .modal-actions .btn { text-decoration: none; color: inherit; }
 .modal-actions .btn.primary { color: #fff; }
@@ -406,17 +405,12 @@ body.sim-running .part { cursor: pointer; }
 @keyframes spin { to { transform: rotate(360deg); } }
 #drawer:not(.open) ~ .code-issues { right: 100px; }
 
-/* --------------------------------------------- finalize intro: rainbow edges */
-@property --gx-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-#edgeGlow {
-  position: fixed; inset: 0; z-index: 250; pointer-events: none; opacity: 0; transition: opacity 0.35s ease;
-  background: conic-gradient(from var(--gx-a), #e53935, #fb8c00, #fdd835, #43a047, #1e88e5, #3f51b5, #8e24aa, #e53935);
-  -webkit-mask: linear-gradient(90deg, #000, transparent 90px, transparent calc(100% - 90px), #000), linear-gradient(180deg, #000, transparent 90px, transparent calc(100% - 90px), #000);
-  mask: linear-gradient(90deg, #000, transparent 90px, transparent calc(100% - 90px), #000), linear-gradient(180deg, #000, transparent 90px, transparent calc(100% - 90px), #000);
-  animation: gx-spin 1.4s linear infinite;
+/* -------------------------------- finalize intro: the background goes rainbow */
+body.fin-intro #stage { animation: bg-rainbow 0.95s linear; }
+@keyframes bg-rainbow {
+  0% { background-color: #fde3e3; } 16% { background-color: #fee9d6; } 33% { background-color: #fff6cf; }
+  50% { background-color: #dff2e1; } 66% { background-color: #dcebfb; } 83% { background-color: #e3e5f6; } 100% { background-color: #eedff3; }
 }
-body.fin-intro #edgeGlow { opacity: 0.9; }
-@keyframes gx-spin { to { --gx-a: 360deg; } }
 
 /* ---------------------------------------------------------------- finalize */
 .finalize {
@@ -448,8 +442,6 @@ body.fin-intro #edgeGlow { opacity: 0.9; }
 .fin-shop .buy { grid-row: 1 / span 2; grid-column: 3; padding: 7px 12px; background: var(--wO); color: #1d1300; font-weight: 700; font-size: 14px; }
 
 .splash { z-index: 400; }
-.splash-logo { width: min(520px, 90vw); height: auto; margin-bottom: 18px; }
-.splash-tag { margin: 0 0 30px; font-size: 20px; font-weight: 600; }
 .splash-thanks { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-2); }
 .splash-credits { list-style: none; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin: 0 0 34px; padding: 0; }
 .splash-credits li { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 14px 18px; border: 1px solid var(--line); border-top: 5px solid var(--wG); }
