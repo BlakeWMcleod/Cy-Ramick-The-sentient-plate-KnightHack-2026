@@ -1,15 +1,3 @@
-/* GFLUX parts library.
- *
- * Every part is a real, commonly sold hobby module. Pin names and pin order
- * follow the silkscreen of the module as usually sold. Geometry is in grid
- * units where 1 grid = 2.54 mm (0.1"), so header pins land on real pitch and
- * the PCB export keeps real spacing.
- *
- * pins: an array (one row along the bottom edge) or {left, right, top, bottom}
- *       arrays listed top-to-bottom / left-to-right.
- * code: Arduino snippets. [[PIN]] becomes the ESP32 GPIO wired to that pin,
- *       [[ANY]] the first wired GPIO, [[n]] the instance number.
- */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.COLORS = [
@@ -25,7 +13,6 @@ GFLUX.COLORS = [
 ];
 GFLUX.colorHex = (key) => (GFLUX.COLORS.find((c) => c.key === key) || GFLUX.COLORS[3]).hex;
 
-// One ROYGBIVWB colour per library compartment, like a jumper-wire kit box.
 GFLUX.CATEGORIES = [
   { id: 'boards',  name: 'Boards',   color: 'R' },
   { id: 'basics',  name: 'Basics',   color: 'O' },
@@ -48,7 +35,6 @@ const ESP32_GPIO = {
 const C3_GPIO = { IO0: 0, IO1: 1, IO2: 2, IO3: 3, IO4: 4, IO5: 5, IO6: 6, IO7: 7, IO8: 8, IO9: 9, IO10: 10, IO20: 20, IO21: 21 };
 
 GFLUX.PARTS = [
-  // ---------------------------------------------------------------- Boards
   {
     id: 'esp32', name: 'ESP32 board', mpn: 'ESP32-DevKit-V1', cat: 'boards', ref: 'U',
     full: 'ESP32-WROOM-32 DevKit V1 Development Board (30-pin, USB)',
@@ -57,8 +43,6 @@ GFLUX.PARTS = [
     rails: { '3V3': '3V3', VIN: '5V', GND: 'GND' },
     softRails: ['VIN'], vin: { VIN: [4.5, 12], '3V3': [3.0, 3.6] },
     inputOnly: ['VP', 'VN', 'D34', 'D35'],
-    // Auto-wire: preferred GPIOs, ADC1 pins (ADC2 stops working with Wi-Fi), SPI bus,
-    // and uart = module pin -> board pin (crossed over: module TX goes to RX2).
     autoOrder: ['D4', 'D5', 'D13', 'D14', 'D18', 'D19', 'D23', 'D25', 'D26', 'D27', 'D32', 'D33', 'RX2', 'TX2', 'D15', 'D2', 'D12'],
     adc: ['D34', 'D35', 'VP', 'VN', 'D32', 'D33'],
     spi: { SCK: 'D18', MISO: 'D19', MOSI: 'D23' },
@@ -88,7 +72,6 @@ GFLUX.PARTS = [
     },
   },
 
-  // ---------------------------------------------------------------- Basics
   {
     id: 'resistor', name: 'Resistor', mpn: '220R', cat: 'basics', ref: 'R', passive: true,
     full: '220 Ω 1/4 W Carbon Film Resistor (resistor assortment kit)', q: 'resistor assortment kit 1/4w',
@@ -124,7 +107,6 @@ GFLUX.PARTS = [
     tip: 'Plugs into a breadboard and gives you 5 V and 3.3 V rails.',
   },
 
-  // ---------------------------------------------------------------- Lights
   {
     id: 'led', name: 'LED', mpn: 'LED-5mm', cat: 'lights', ref: 'D', passive: true,
     full: '5 mm LED (assorted colors kit)', q: '5mm LED assorted kit',
@@ -184,7 +166,6 @@ GFLUX.PARTS = [
     },
   },
 
-  // ---------------------------------------------------------------- Sensors
   {
     id: 'hcsr04', name: 'Distance sensor', mpn: 'HC-SR04', cat: 'sensors', ref: 'U', power: '5V',
     volts: [4.5, 5.5],
@@ -349,7 +330,6 @@ GFLUX.PARTS = [
     },
   },
 
-  // ---------------------------------------------------------------- Input
   {
     id: 'touch', name: 'Touch sensor', mpn: 'TTP223', cat: 'input', ref: 'U',
     volts: [2.0, 5.5],
@@ -416,7 +396,6 @@ GFLUX.PARTS = [
     },
   },
 
-  // ---------------------------------------------------------------- Screens
   {
     id: 'oled', name: 'Small screen', mpn: 'SSD1306-0.96', cat: 'screens', ref: 'U',
     volts: [3.0, 5.5],
@@ -454,7 +433,6 @@ GFLUX.PARTS = [
     },
   },
 
-  // ---------------------------------------------------------------- Motors
   {
     id: 'servo', name: 'Servo motor', mpn: 'SG90', cat: 'motors', ref: 'M', power: '5V',
     volts: [4.8, 6.0],
@@ -513,7 +491,6 @@ GFLUX.PARTS = [
     code: { glob: 'const int VIBE[[n]]_PIN = [[IN]];', setup: 'pinMode(VIBE[[n]]_PIN, OUTPUT);', loop: 'digitalWrite(VIBE[[n]]_PIN, (millis() / 1000) % 2);' },
   },
 
-  // ---------------------------------------------------------------- Sound & storage
   {
     id: 'buzzer', name: 'Buzzer', mpn: 'KY-012', cat: 'sound', ref: 'BZ',
     volts: [3.3, 5.5],
@@ -574,7 +551,6 @@ GFLUX.PARTS = [
     },
   },
 
-  // ---------------------------------------------------------------- Power
   {
     id: 'battery', name: 'Battery pack', mpn: '4xAA', cat: 'power', ref: 'BT', passive: true,
     full: '4×AA Battery Holder with On/Off Switch (6 V)', q: '4 AA battery holder with switch',
@@ -608,12 +584,9 @@ GFLUX.PARTS = [
   },
 ];
 
-// ------------------------------------------------------------------ layout
-
-/** Pin role used for wire colours and KiCad pin types. */
 GFLUX.pinKind = function (name) {
   const n = String(name).toUpperCase();
-  if (/^(GND|-|M-|B-|IN-|OUT-|USB-)$/.test(n)) return 'gnd'; // not 'G': that's the RGB LED's green pin
+  if (/^(GND|-|M-|B-|IN-|OUT-|USB-)$/.test(n)) return 'gnd';
   if (/^(3V3|3\.3V)$/.test(n)) return 'v3';
   if (/^(VCC|VIN|5V|\+5V|12V|\+|M\+|B\+|IN\+|OUT\+|DC\+)$/.test(n)) return 'v5';
   if (n === 'SDA') return 'sda';
@@ -628,7 +601,6 @@ function fitSpan(min, n) {
   return v;
 }
 
-/** Turn a part definition into concrete geometry (w, h, pins with local positions). */
 GFLUX.layout = function (def) {
   const sides = Array.isArray(def.pins) ? { bottom: def.pins } : def.pins;
   const L = sides.left || [], R = sides.right || [], T = sides.top || [], B = sides.bottom || [];
@@ -659,7 +631,6 @@ GFLUX.amazonUrl = (def) => def.url || 'https://www.amazon.com/s?k=' + encodeURIC
 const cache = new Map();
 GFLUX.customParts = [];
 
-/** Look up a part definition (built-in or user-created) with its geometry. */
 GFLUX.getPart = function (id) {
   if (cache.has(id)) return cache.get(id);
   const def = GFLUX.PARTS.find((p) => p.id === id) || GFLUX.customParts.find((p) => p.id === id);
@@ -680,7 +651,6 @@ GFLUX.setCustomParts = function (list) {
 GFLUX.PCB_COLORS = PCB;
 
 const RAIL_VOLTS = { '3V3': 3.3, '5V': 5 };
-/** Voltage a supply pin puts out (buck/boost outputs follow their setting). */
 GFLUX.railVoltage = function (inst, pinName) {
   const def = GFLUX.getPart(inst.type);
   const rail = def.rails && def.rails[pinName];

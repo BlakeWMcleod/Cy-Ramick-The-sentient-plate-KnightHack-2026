@@ -1,21 +1,17 @@
-/* GFLUX part artwork. Draws a part in its own unrotated local frame as an SVG
- * string, so each part looks like the real module from the parts bin. */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.art = (function () {
-  const G = 20; // px per grid unit
+  const G = 20;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const r = (x, y, w, h, fill, extra = '') => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}" ${extra}/>`;
   const c = (x, y, rad, fill, extra = '') => `<circle cx="${x}" cy="${y}" r="${rad}" fill="${fill}" ${extra}/>`;
   const t = (x, y, s, size, fill, extra = '') => `<text x="${x}" y="${y}" font-size="${size}" fill="${fill}" ${extra}>${esc(s)}</text>`;
   const SILVER = 'url(#gx-silver)', GOLD = '#d9ac4a';
 
-  /** Feature drawings, given the free inner area (px) of the board. */
   const FEATURES = {
     esp32(a, def) {
       const sw = a.w * 0.82, sx = a.x + (a.w - sw) / 2;
       let s = '';
-      // PCB antenna meander above the module can
       let zig = `M${sx + 6} ${a.y + 4}`;
       for (let i = 0; i < 7; i++) zig += ` v14 h${sw / 16} v-14 h${sw / 16}`;
       s += `<path d="${zig}" fill="none" stroke="${GOLD}" stroke-width="2"/>`;
@@ -27,7 +23,7 @@ GFLUX.art = (function () {
       s += r(a.x + a.w - 22, by, 16, 12, '#ddd', 'rx="2"') + c(a.x + a.w - 14, by + 6, 4, '#333');
       s += t(a.x + 14, by - 4, 'EN', 7, '#eee', 'text-anchor="middle"') + t(a.x + a.w - 14, by - 4, 'BOOT', 7, '#eee', 'text-anchor="middle"');
       s += c(a.x + a.w / 2 - 14, by + 6, 3, '#e53935') + c(a.x + a.w / 2 + 14, by + 6, 3, '#4fc3f7', 'class="gx-blink"');
-      s += r(a.x + a.w / 2 - 18, a.y + a.h + 6, 36, 22, SILVER, 'rx="3" stroke="#777"'); // micro USB
+      s += r(a.x + a.w / 2 - 18, a.y + a.h + 6, 36, 22, SILVER, 'rx="3" stroke="#777"');
       return s;
     },
     c3(a) {
@@ -227,7 +223,6 @@ GFLUX.art = (function () {
     },
   };
 
-  /** Resistor and other bodies without a board. */
   function resistor(def) {
     const y = 0, w = def.w * G;
     return `<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="#b8b8b8" stroke-width="3" stroke-linecap="round"/>` +
@@ -235,8 +230,6 @@ GFLUX.art = (function () {
       [['#e53935', 0.3], ['#e53935', 0.4], ['#6d3b1d', 0.5], ['#d4af37', 0.68]].map(([col, f]) => r(w * f, y - 7, 4, 14, col)).join('');
   }
 
-  /** Wire colour key for a controller pin: GND black, supply pins red, and
-   *  every signal pin takes the next colour of the rainbow (ROYGBIV) in order. */
   const RAINBOW = ['R', 'O', 'Y', 'G', 'B', 'I', 'V'];
   function pinColor(def, num) {
     const pin = def.pins.find((p) => p.num === num);
@@ -248,7 +241,6 @@ GFLUX.art = (function () {
     return RAINBOW[signals.indexOf(pin) % RAINBOW.length];
   }
 
-  /** Header strip + gold pins, plus silkscreen labels. */
   function pinsAndLabels(def, onBoard) {
     let s = '';
     const bySide = { left: [], right: [], top: [], bottom: [] };
@@ -287,7 +279,6 @@ GFLUX.art = (function () {
     return { x, y, w: def.w * G - inset('right') * G - x, h: def.h * G - inset('bottom') * G - y };
   }
 
-  /** Full part drawing in local, unrotated px coordinates. */
   function draw(def) {
     const pad = 0.6 * G;
     let s = '';
@@ -301,7 +292,6 @@ GFLUX.art = (function () {
         }
       }
     } else {
-      // Loose component: legs from body to pins.
       const a = innerArea(def);
       for (const p of def.pins) {
         const tx = Math.min(Math.max(p.x * G, a.x + 4), a.x + a.w - 4), ty = Math.min(Math.max(p.y * G, a.y + 4), a.y + a.h - 4);
@@ -314,7 +304,6 @@ GFLUX.art = (function () {
     return s + pinsAndLabels(def, !!def.board);
   }
 
-  /** Shared gradients/patterns, injected once into the canvas <defs>. */
   const DEFS = `
     <linearGradient id="gx-silver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e6e8ea"/><stop offset="1" stop-color="#b9bdc2"/></linearGradient>
     <pattern id="gx-mesh" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="4" fill="#8a8f95"/><circle cx="2" cy="2" r="1.1" fill="#3a3d41"/></pattern>

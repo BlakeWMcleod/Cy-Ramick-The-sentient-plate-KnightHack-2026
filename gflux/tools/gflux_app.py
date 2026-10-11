@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""GFLUX desktop launcher: the program inside GFLUX.exe.
-
-Double-click it (or run `python3 gflux/tools/gflux_app.py`) and it will:
-  1. serve the GFLUX site on this computer and open it in your browser,
-  2. connect the Schematic / PCB buttons to KiCad,
-  3. look for KiCad (before the browser opens) and, if it isn't found, offer to
-     install it or let you point at the KiCad you already have.
-
-Options:
-  --port N     port to use (default 8765, or the next free one)
-  --no-browser don't open the browser
-  --yes        install KiCad without asking if it's missing
-  --selftest   start, check the site and API respond, then exit (used by CI;
-               never opens a window or dialog)
-"""
 import argparse
 import json
 import os
@@ -26,11 +11,10 @@ import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-import kicad_bridge  # noqa: E402  (same folder; bundled by PyInstaller)
+import kicad_bridge
 
 
 def site_root():
-    """The gflux/ web folder: bundled next to the code in the .exe, or the repo folder."""
     if getattr(sys, 'frozen', False):
         return os.path.join(sys._MEIPASS, 'site')
     return os.path.dirname(HERE)
@@ -42,16 +26,14 @@ def get_json(url, timeout=2):
 
 
 def already_running(port):
-    """True if a GFLUX bridge already answers on this port."""
     return running_site(port) is not None
 
 
 def running_site(port):
-    """Site fingerprint of the GFLUX on this port: '' for an older GFLUX, None if none."""
     try:
         return get_json('http://127.0.0.1:%d/api/app' % port, timeout=2).get('site') or ''
     except urllib.error.HTTPError:
-        pass  # older GFLUX without /api/app
+        pass
     except Exception:
         return None
     try:
@@ -62,7 +44,7 @@ def running_site(port):
 
 def port_free(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        if sys.platform != 'win32':  # same as the server, so a just-closed port counts as free
+        if sys.platform != 'win32':
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             s.bind(('127.0.0.1', port))
@@ -72,15 +54,13 @@ def port_free(port):
 
 
 def stop_old_gflux(port):
-    """Ask the GFLUX on `port` to quit so this version can take its place (same
-    address, so the browser keeps the saved work). True once the port is free."""
     try:
         req = urllib.request.Request('http://127.0.0.1:%d/api/app/quit' % port, data=b'{}', method='POST',
                                      headers={'Content-Type': 'application/json'})
         urllib.request.urlopen(req, timeout=2).close()
     except Exception:
         if sys.platform == 'win32':
-            kill_windows_listener(port)  # older GFLUX versions can't be asked
+            kill_windows_listener(port)
     for _ in range(30):
         if port_free(port):
             return True
@@ -89,7 +69,6 @@ def stop_old_gflux(port):
 
 
 def kill_windows_listener(port):
-    """Windows: end the older GFLUX.exe that listens on `port` (only a GFLUX program)."""
     import subprocess
     try:
         out = subprocess.run(['netstat', '-ano', '-p', 'TCP'], capture_output=True, text=True, timeout=10).stdout
@@ -119,7 +98,6 @@ def free_port(start):
 
 
 def say(text=''):
-    """print() that never crashes on a console that can't show a character (Windows code pages)."""
     try:
         print(text, flush=True)
     except UnicodeEncodeError:
@@ -131,7 +109,6 @@ def interactive():
 
 
 def choose(prompt, keys, default):
-    """Read one of keys (lowercase letters) from the console; default without a TTY or on Enter."""
     if not interactive():
         return default
     while True:
@@ -152,14 +129,12 @@ def show_kicad(info):
 
 
 def install_kicad():
-    """Start the KiCad installer. Returns the status (the install keeps running in the background)."""
     status = kicad_bridge.start_install()
     say(' ' + status['message'])
     return status
 
 
 def wait_for_install(runner):
-    """Print progress until a running install finishes (file pickers keep working meanwhile)."""
     status = kicad_bridge.install_status()
     if status['state'] != 'running':
         return status
@@ -170,7 +145,7 @@ def wait_for_install(runner):
     say()
     say(' ' + status['message'])
     if status['state'] == 'done':
-        info = kicad_bridge.detect_kicad()  # refreshed by the installer thread
+        info = kicad_bridge.detect_kicad()
         show_kicad(info)
         if info['found']:
             say(' Reload GFLUX in your browser to use KiCad.')
@@ -178,7 +153,6 @@ def wait_for_install(runner):
 
 
 def locate_kicad_console():
-    """Let the user point at an existing KiCad: native picker, or a pasted path without one."""
     path = None
     if kicad_bridge.picker_available():
         say(' A window will open: pick kicad-cli, kicad.exe, KiCad.app or the KiCad folder.')
@@ -205,7 +179,6 @@ def locate_kicad_console():
 
 
 def offer_kicad(auto_yes):
-    """KiCad wasn't found: offer Install / Locate / Skip. Returns True if an install is running."""
     _, url, how = kicad_bridge.install_plan()
     say()
     say(' Without KiCad, GFLUX still works, but the Schematic and PCB buttons can only')
@@ -245,14 +218,13 @@ def selftest(port):
     assert health.get('bridge') is True and health.get('launcher') is True, health
     for key in ('ok', 'version', 'cli', 'source', 'problem', 'searched', 'canInstall', 'install'):
         assert key in health, key
-    # recheck runs detection again; locate from another website is refused (so no dialog opens).
     req = urllib.request.Request(base + '/api/kicad/recheck', data=b'', method='POST')
     with urllib.request.urlopen(req, timeout=60) as r:
         again = json.loads(r.read().decode('utf-8'))
     assert again.get('bridge') is True and again.get('ok') == health.get('ok'), again
     req = urllib.request.Request(base + '/api/kicad/locate', data=b'', method='POST',
                                  headers={'Origin': 'http://evil.example'})
-    log, kicad_bridge.Handler.log_message = kicad_bridge.Handler.log_message, lambda *a: None  # expected 403
+    log, kicad_bridge.Handler.log_message = kicad_bridge.Handler.log_message, lambda *a: None
     try:
         urllib.request.urlopen(req, timeout=10)
         raise AssertionError('locate accepted a foreign Origin')
@@ -296,7 +268,6 @@ def main():
             httpd.shutdown()
         return
 
-    # File pickers asked for by the page run on this (main) thread: macOS requires it.
     runner = kicad_bridge.MainThreadRunner()
     kicad_bridge.set_ui_runner(runner)
     say('=' * 60)
@@ -304,7 +275,7 @@ def main():
     say(' Keep this window open')
     say('=' * 60)
     say(' Looking for KiCad...')
-    info = kicad_bridge.detect_kicad()  # before the browser opens, so the page shows the right status
+    info = kicad_bridge.detect_kicad()
     show_kicad(info)
     installing = False
     if not info['found']:

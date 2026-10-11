@@ -1,16 +1,7 @@
-/* GFLUX auto-wire planner: works out the wires that hook one part up to the
- * nearest ESP32 (ground, power and the signal pins its code uses).
- *
- *   GFLUX.autowire.plan(state, uid)    -> { controller, steps, skipped, done, message }
- *   GFLUX.autowire.canWire(state, uid) -> boolean
- *
- * Pure: nothing in `state` is changed, the editor applies the steps. A step
- * with `resistor: true` needs a series 220 Ω resistor between the two pins. */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.autowire = (function () {
   const ANALOG = /^(AO|AOUT|VRX|VRY)$/;
-  // Module pins that only send data to the board (so input-only GPIOs are fine).
   const OUTPUTS = /^(ECHO|OUT|DO|AO|AOUT|TX|DT|VRX|VRY|MISO|INT|SQW|BUSY|DOUT|GPIO1|IRQ|32K)$/;
   const SPECIAL = { led: true, button: true, pot: true };
 
@@ -34,7 +25,6 @@ GFLUX.autowire = (function () {
     return best;
   }
 
-  /** Pin names used as [[PIN]] placeholders in a part's code, in order. */
   function placeholders(def) {
     const keys = [];
     if (!def.code) return keys;
@@ -45,7 +35,6 @@ GFLUX.autowire = (function () {
     return keys;
   }
 
-  /** 'I2C SDA', 'SPI MOSI', ... for pins that may share a board pin with other parts. */
   function busRole(def, name) {
     const has = (n) => def.pins.some((p) => p.name === n);
     if (has('SCK') && (has('MOSI') || has('MISO')) && /^(SCK|MISO|MOSI)$/.test(name)) return 'SPI ' + name;
@@ -77,7 +66,6 @@ GFLUX.autowire = (function () {
     for (const k of ['SDA', 'SCL']) if (cdef.i2c && cdef.i2c[k] != null) i2c[k] = gpioName(cdef.i2c[k]);
     const reserved = new Set([].concat(cdef.adc || [], Object.values(cdef.spi || {}), Object.values(i2c), Object.values(cdef.uart || {})));
 
-    // Hypothetical circuit: the real one plus every step planned so far.
     const hyp = { parts: state.parts, wires: state.wires.slice() };
     let nl = GFLUX.buildNets(hyp);
     const connected = (u, num) => nl.byPin.has(GFLUX.pinKey(u, num));
@@ -98,7 +86,6 @@ GFLUX.autowire = (function () {
       nl = GFLUX.buildNets(hyp);
     }
 
-    /** Best free general-purpose GPIO. Input-only pins only for module outputs. */
     function pickGpio(output) {
       const order = (cdef.autoOrder || Object.keys(cdef.gpio || {})).slice();
       if (output) for (const n of inputOnly) if (!order.includes(n)) order.push(n);
@@ -117,7 +104,6 @@ GFLUX.autowire = (function () {
       addStep(pin, ctlNum(name), gpioLabel(name) + (note ? ` (${note})` : ''), opts);
     }
 
-    /** Board pin already carrying `role`, else its default pin if free. */
     function busPin(role) {
       for (const cp of cdef.pins) {
         const net = nl.byPin.get(GFLUX.pinKey(ctl.uid, cp.num));
@@ -159,12 +145,10 @@ GFLUX.autowire = (function () {
 
     const pins = def.pins;
     const keys = placeholders(def);
-    // Pins the code drives are signals, even if the name looks like a rail ('G' on the RGB LED).
     const supply = (p) => !noAuto.has(p.name) && !keys.includes(p.name) && !(def.rails && def.rails[p.name]);
     const ctlWorld = new Map(GFLUX.partPins(ctl).map((p) => [p.num, p]));
     const myWorld = new Map(GFLUX.partPins(inst).map((p) => [p.num, p]));
 
-    // Ground: one wire per part, to the board GND nearest to it.
     const gnds = def.id === 'button' ? pins.filter((p) => p.num === '2')
       : pins.filter((p) => p.kind === 'gnd' && supply(p));
     if (gnds.length) {
@@ -177,13 +161,11 @@ GFLUX.autowire = (function () {
           const d = dist2(myWorld.get(g.num), ctlWorld.get(c.num));
           if (!best || d < best.d) best = { g, c, d };
         }
-        // Quiet: a caution here is about some other pin already on that GND net.
         if (best) addStep(best.g, best.c.num, 'GND', { quiet: true });
         else out.skipped.push({ pin: gnds[0].name, why: 'The board has no GND pin' });
       }
     }
 
-    // Power: one supply wire per part.
     const powers = def.id === 'led' ? []
       : pins.filter((p) => (p.kind === 'v3' || p.kind === 'v5') && supply(p));
     if (powers.length) {
@@ -199,7 +181,6 @@ GFLUX.autowire = (function () {
       }
     }
 
-    // Signals: exactly the pins the part's code refers to.
     const sigs = [];
     for (const key of keys) {
       let p;

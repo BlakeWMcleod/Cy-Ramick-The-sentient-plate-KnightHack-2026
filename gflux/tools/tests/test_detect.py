@@ -1,11 +1,3 @@
-"""Tests for KiCad detection and the bridge's KiCad endpoints.
-
-    python3 -m unittest discover gflux/tools/tests -v
-
-Detection tests are hermetic: they build fake Windows / macOS / Linux install
-trees in a temp folder, with tiny Python "kicad-cli" scripts that print a
-version, and pass platform / env / home / root / drives / which / registry.
-"""
 import http.client
 import io
 import json
@@ -22,13 +14,12 @@ from unittest import mock
 TOOLS = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GFLUX = os.path.dirname(TOOLS)
 sys.path.insert(0, TOOLS)
-import kicad_bridge as kb  # noqa: E402
+import kicad_bridge as kb
 
-POSIX = os.name != 'nt'  # fake kicad-cli(.exe) scripts run through their #! line
+POSIX = os.name != 'nt'
 
 
 def fake_cli(path, version, code=0):
-    """A stand-in kicad-cli that prints `version` for `kicad-cli version`."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
         f.write('#!%s\nimport sys\nif sys.argv[1:2] == ["version"]:\n    print(%r)\nsys.exit(%d)\n'
@@ -129,7 +120,6 @@ class WindowsDetection(DetectTestCase):
         kb.save_config({'kicad_cli': os.path.join(old, 'kicad-cli.exe')}, cfg)
         info = self.detect()
         self.assertEqual((info['version'], info['source']), ('7.0.11', 'saved setting'))
-        # a saved install folder works too
         kb.save_config({'kicad_cli': os.path.dirname(old)}, cfg)
         self.assertEqual(self.detect()['source'], 'saved setting')
 
@@ -180,7 +170,6 @@ class WindowsDetection(DetectTestCase):
             info = kb.detect_kicad(platform='win32', env=self.env, home=self.home, drives=[])
         reg.assert_called_once()
         self.assertEqual((info['version'], info['source']), ('9.0.3', 'registry'))
-        # DisplayIcon points at bin\kicad.exe: its folder works too
         with mock.patch.object(kb, 'registry_installs', return_value=[dict(entry[0], folder=os.path.join(folder, 'bin'))]):
             info = kb.detect_kicad(platform='win32', env=self.env, home=self.home, drives=[])
         self.assertEqual(info['source'], 'registry')
@@ -283,11 +272,11 @@ class ConfigFile(DetectTestCase):
         kb.save_config({'kicad_cli': '/x/kicad-cli', 'other': 1}, cfg)
         kb.save_config({'other': None}, cfg)
         self.assertEqual(kb.load_config(cfg), {'kicad_cli': '/x/kicad-cli'})
-        self.assertEqual(os.listdir(os.path.dirname(cfg)), ['config.json'])  # no temp files left
+        self.assertEqual(os.listdir(os.path.dirname(cfg)), ['config.json'])
         env = {'GFLUX_CONFIG': cfg, 'PATH': self.empty_bin}
         self.assertEqual(kb.config_path('win32', env, self.home), cfg)
         info = kb.detect_kicad(platform='linux', env=env, home=self.home, root=self.p('root'))
-        self.assertIn('/x/kicad-cli', info['problem'])  # saved location gone: explained, not crashed
+        self.assertIn('/x/kicad-cli', info['problem'])
 
 
 class Caching(unittest.TestCase):
@@ -305,8 +294,6 @@ class Caching(unittest.TestCase):
             kb.refresh_kicad()
             self.assertEqual(det.call_count, 2)
 
-
-# ------------------------------------------------------------ HTTP endpoints
 
 class Server:
     def __init__(self, launcher):
@@ -344,7 +331,7 @@ class Endpoints(unittest.TestCase):
         cls.cfg = os.path.join(cls.tmp, 'config.json')
         cls.env = mock.patch.dict(os.environ, {'GFLUX_CONFIG': cls.cfg})
         cls.env.start()
-        cls.quiet = mock.patch.object(kb.Handler, 'log_message', lambda *a: None)  # expected 403/501 lines
+        cls.quiet = mock.patch.object(kb.Handler, 'log_message', lambda *a: None)
         cls.quiet.start()
         cls.server = Server(launcher=True)
         cls.own = 'http://127.0.0.1:%d' % cls.server.port
@@ -358,7 +345,7 @@ class Endpoints(unittest.TestCase):
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
     def setUp(self):
-        kb._detected = FAKE_DETECTION  # no real detection unless a test asks for it
+        kb._detected = FAKE_DETECTION
         if os.path.exists(self.cfg):
             os.unlink(self.cfg)
 
@@ -435,7 +422,6 @@ class Endpoints(unittest.TestCase):
 
 
 def make_schematic():
-    """A .kicad_sch made by GFLUX's own exporter (js/kicad.js) under Node."""
     node = shutil.which('node')
     if not node:
         return None
@@ -452,7 +438,6 @@ def make_schematic():
 @unittest.skipUnless(os.environ.get('GFLUX_E2E', '1') != '0' and POSIX, 'end-to-end export disabled')
 @unittest.skipUnless(POSIX, 'fake kicad-cli scripts need a POSIX shell')
 class OpenInKicad(unittest.TestCase):
-    """POST /api/kicad/open saves the project and launches both editors."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix='gflux-open-')
@@ -519,7 +504,6 @@ class OpenInKicad(unittest.TestCase):
 
 
 class EndToEndExport(unittest.TestCase):
-    """Real kicad-cli (if installed) makes a PDF through the bridge."""
 
     def test_schematic_zip_has_pdf(self):
         kb._detected = None

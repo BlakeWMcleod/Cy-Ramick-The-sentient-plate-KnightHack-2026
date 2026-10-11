@@ -1,32 +1,4 @@
 #!/usr/bin/env python3
-"""GFLUX local KiCad bridge (Python 3 standard library only).
-
-    python3 gflux/tools/kicad_bridge.py [--port 8765] [--host 127.0.0.1]
-
-Serves the gflux/ folder at http://localhost:8765/ and exposes kicad-cli:
-
-    GET  /api/kicad/health     -> cached KiCad detection, see health() below
-    POST /api/kicad/recheck    -> look for KiCad again, returns the same shape as health
-    POST /api/kicad/locate     -> show a file picker on this computer so the user can point
-                                  at their KiCad; saves it and returns health (+ located/message)
-    GET  /api/arduino/health   -> Arduino status (?refresh=1 re-scans); POST /api/arduino/check|setup|open: see arduino_bridge.py
-    GET  /api/kicad/install    -> install status {"state": "idle|running|done|failed|manual", ...}
-    POST /api/kicad/install    -> start installing KiCad (winget / Homebrew)
-    POST /api/kicad/schematic  {name, sch}            -> zip: .kicad_sch, -schematic.pdf, -schematic.svg
-    POST /api/kicad/pcb        {name, pcb, sch?, pro?} -> zip: .kicad_pcb, gerbers/ + drill, -pcb.pdf
-
-recheck, locate and install only accept requests from the page this bridge
-serves (no Origin header, or http://localhost:<port> / http://127.0.0.1:<port>).
-
-KiCad is found by the launcher, never by the browser: detect_kicad() checks a
-saved setting, $KICAD_CLI, PATH, the usual install folders for this OS and, on
-Windows, the registry, then runs `kicad-cli version` on what it finds.
-
-CORS (including Chrome's Private Network Access preflight) is enabled, so a
-copy of GFLUX hosted elsewhere can still talk to the bridge on localhost.
-Errors come back as JSON: {"ok": false, "error": "...", "stderr": "..."}.
-Works with kicad-cli 7, 8 and 9.
-"""
 import argparse
 import hashlib
 import glob
@@ -47,11 +19,11 @@ import zipfile
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the gflux/ folder
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAX_BODY = 25 * 1024 * 1024
 TIMEOUT = 180
-PROBE_TIMEOUT = 30   # `kicad-cli version` can be slow on a cold start / virus scan
-MIN_MAJOR = 7        # kicad-cli first shipped with KiCad 7
+PROBE_TIMEOUT = 30
+MIN_MAJOR = 7
 FLATPAK_ID = 'org.kicad.KiCad'
 OVERRIDE_SOURCES = ('saved setting', 'KICAD_CLI', 'PATH')
 DOWNLOAD_URL = 'https://www.kicad.org/download/'
@@ -67,21 +39,15 @@ class CliError(Exception):
 
 
 def safe_name(name):
-    """Same rule as GFLUX.kicad.baseName in js/kicad.js."""
     s = re.sub(r'[^A-Za-z0-9_-]+', '_', str(name or '')).strip('_')[:60]
     return s or 'gflux'
 
-
-# ------------------------------------------------------------ running kicad-cli
-# A "cli" is either a path to kicad-cli or an argv prefix list, e.g.
-# ['flatpak', 'run', '--command=kicad-cli', 'org.kicad.KiCad'].
 
 def cli_argv(cli):
     return list(cli) if isinstance(cli, (list, tuple)) else [cli]
 
 
 def cli_display(cli):
-    """The cli as one string, for JSON and the console."""
     if cli is None:
         return None
     return cli if isinstance(cli, str) else ' '.join(cli)
@@ -95,7 +61,6 @@ def _proc_kw():
 
 
 def version_tuple(text):
-    """'9.0.2' -> (9, 0, 2); 'KiCad 10' -> (10,); no number -> ()."""
     m = re.search(r'\d+(?:\.\d+)*', str(text or ''))
     return tuple(int(x) for x in m.group(0).split('.')) if m else ()
 
@@ -104,7 +69,6 @@ _version_cache = {}
 
 
 def cli_version(cli):
-    """('7.0.11', 7) for a working kicad-cli; raises CliError / OSError / SubprocessError otherwise."""
     key = tuple(cli_argv(cli))
     if key not in _version_cache:
         r = subprocess.run(cli_argv(cli) + ['version'], capture_output=True, text=True, errors='replace',
@@ -129,7 +93,6 @@ def run(cli, args, cwd):
 
 
 def run_layers(cli, args, layers, cwd):
-    """Run with canonical layer names; retry with KiCad 8+ display names if refused."""
     try:
         return run(cli, args + ['--layers', ','.join(layers)], cwd)
     except CliError:
@@ -155,7 +118,6 @@ def write(path, text):
 
 
 def work_dir(cli, prefix):
-    """Temp folder for an export. Flatpak KiCad has its own private /tmp, so use one in the home folder."""
     base = None
     if not isinstance(cli, str):
         base = os.path.join(os.path.expanduser('~'), '.cache', 'gflux')
@@ -178,7 +140,7 @@ def export_schematic(cli, data):
         run(cli, ['sch', 'export', 'pdf', '-o', os.path.join(out, name + '-schematic.pdf'), sch_path], out)
         svg_dir = os.path.join(tmp, 'svg')
         os.mkdir(svg_dir)
-        try:  # svg is a bonus: never fail the request over it
+        try:
             run(cli, ['sch', 'export', 'svg', '-o', svg_dir + os.sep, sch_path], out)
             for i, f in enumerate(sorted(glob.glob(os.path.join(svg_dir, '*.svg')))):
                 shutil.move(f, os.path.join(out, name + '-schematic' + ('-%d' % (i + 1) if i else '') + '.svg'))
@@ -202,17 +164,13 @@ def export_pcb(cli, data):
             write(os.path.join(out, name + '.kicad_sch'), data['sch'])
         if isinstance(data.get('pro'), str):
             write(os.path.join(out, name + '.kicad_pro'), data['pro'])
-        # Output dirs get a trailing separator: kicad-cli 7 drill export needs it.
         run_layers(cli, ['pcb', 'export', 'gerbers', '-o', gerbers + os.sep, pcb_path], GERBER_LAYERS, out)
         run(cli, ['pcb', 'export', 'drill', '--format', 'excellon', '-o', gerbers + os.sep, pcb_path], out)
         run_layers(cli, ['pcb', 'export', 'pdf', '-o', os.path.join(out, name + '-pcb.pdf'), pcb_path], PDF_LAYERS, out)
         return name, zip_dir(out)
 
 
-# ------------------------------------------------------------ saved setting
-
 def config_path(platform=None, env=None, home=None):
-    """Where GFLUX keeps its settings ($GFLUX_CONFIG overrides it)."""
     platform = platform or sys.platform
     env = os.environ if env is None else env
     if env.get('GFLUX_CONFIG'):
@@ -226,7 +184,6 @@ def config_path(platform=None, env=None, home=None):
 
 
 def load_config(path=None):
-    """The settings dict; {} if the file is missing or corrupt."""
     try:
         with open(path or config_path(), 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -236,7 +193,6 @@ def load_config(path=None):
 
 
 def save_config(updates, path=None):
-    """Merge updates into the settings file (None deletes a key). Written atomically."""
     path = path or config_path()
     data = load_config(path)
     for k, v in updates.items():
@@ -262,19 +218,15 @@ def save_config(updates, path=None):
     return data
 
 
-# ------------------------------------------------------------ finding KiCad
-
 def _cli_name(platform):
     return 'kicad-cli.exe' if platform == 'win32' else 'kicad-cli'
 
 
 def _newest_first(paths, part):
-    """Sort paths by the version number in part(path), newest first (numerically: 10.0 > 9.0)."""
     return sorted(paths, key=lambda p: version_tuple(part(p)), reverse=True)
 
 
 def _clis_in_dir(d, exe):
-    """kicad-cli paths that may live in folder d (bin folder, install folder, KiCad.app, KiCad parent...)."""
     out = [os.path.join(d, exe), os.path.join(d, 'bin', exe),
            os.path.join(d, 'Contents', 'MacOS', exe), os.path.join(d, 'KiCad.app', 'Contents', 'MacOS', exe)]
     e = glob.escape(d)
@@ -286,9 +238,6 @@ def _clis_in_dir(d, exe):
 
 
 def resolve_kicad_path(path, platform=None, up=0):
-    """Existing kicad-cli files for something the user pointed at: kicad-cli itself, kicad(.exe),
-    KiCad.app, a bin folder, an install folder or the KiCad parent folder. With up > 0 a file or
-    folder inside the install also works (parents are checked until something turns up)."""
     platform = platform or sys.platform
     if not isinstance(path, str) or not path.strip():
         return []
@@ -320,7 +269,6 @@ def resolve_kicad_path(path, platform=None, up=0):
 
 
 def _reg_exe_path(s):
-    """'"C:\\KiCad\\bin\\kicad.exe",0' or 'C:\\KiCad\\uninstall.exe /S' -> the .exe path."""
     if not isinstance(s, str) or not s.strip():
         return None
     s = os.path.expandvars(s.strip())
@@ -333,8 +281,6 @@ def _reg_exe_path(s):
 
 
 def registry_installs():
-    """KiCad install folders from the Windows registry, newest first: [{'folder', 'version', 'name'}].
-    Reads the Uninstall keys (HKLM 64-bit, HKLM WOW6432Node, HKCU) and SOFTWARE\\KiCad."""
     try:
         import winreg
     except ImportError:
@@ -369,7 +315,7 @@ def registry_installs():
             i += 1
 
     hklm, hkcu = winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER
-    views = [(hklm, winreg.KEY_WOW64_64KEY), (hklm, winreg.KEY_WOW64_32KEY), (hkcu, 0)]  # 32KEY = WOW6432Node
+    views = [(hklm, winreg.KEY_WOW64_64KEY), (hklm, winreg.KEY_WOW64_32KEY), (hkcu, 0)]
     uninstall = r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall'
     for hive, view in views:
         try:
@@ -394,7 +340,7 @@ def registry_installs():
                     for f in folders:
                         if f and f.strip().strip('"'):
                             found.append({'folder': f.strip().strip('"'), 'version': version, 'name': name})
-    for hive, view in views:  # SOFTWARE\KiCad: any string value that is a folder, one level of version subkeys
+    for hive, view in views:
         try:
             root = winreg.OpenKey(hive, r'SOFTWARE\KiCad', 0, winreg.KEY_READ | view)
         except OSError:
@@ -425,14 +371,13 @@ def registry_installs():
 
 
 def _windows_drives():
-    """Fixed local drives (C:\\, D:\\ ...). Network and removable drives are skipped: they can hang."""
     letters = 'CDEFGHIJKLMNOPQRSTUVWXYZ'
     try:
         import ctypes
         k32 = ctypes.windll.kernel32
         mask = k32.GetLogicalDrives()
         return ['%s:\\' % c for i, c in enumerate(letters, start=2)
-                if mask >> i & 1 and k32.GetDriveTypeW('%s:\\' % c) == 3]  # 3 = DRIVE_FIXED
+                if mask >> i & 1 and k32.GetDriveTypeW('%s:\\' % c) == 3]
     except Exception:
         return ['%s:\\' % c for c in letters if os.path.isdir('%s:\\' % c)]
 
@@ -449,8 +394,6 @@ def _flatpak_cli(which):
 
 
 def _gather(platform=None, env=None, home=None, which=None, registry=None, drives=None, root=''):
-    """Every place kicad-cli could be, in priority order, whether it exists or not.
-    Returns (items [(cli, source)], searched [short labels], notes [problems found on the way])."""
     platform = platform or sys.platform
     env = os.environ if env is None else env
     home = home or os.path.expanduser('~')
@@ -464,10 +407,9 @@ def _gather(platform=None, env=None, home=None, which=None, registry=None, drive
         if label not in searched:
             searched.append(label)
 
-    def R(p):  # filesystem root for the POSIX locations (tests point it at a fake tree)
+    def R(p):
         return os.path.join(root, p.lstrip('/')) if root else p
 
-    # 1. Overrides: what the user saved, then KICAD_CLI, then PATH.
     saved = load_config(config_path(platform, env, home)).get('kicad_cli')
     if saved:
         look('saved setting')
@@ -490,9 +432,8 @@ def _gather(platform=None, env=None, home=None, which=None, registry=None, drive
     if hit:
         items.append((hit, 'PATH'))
 
-    # 2. Where installers put it on this OS.
     if platform == 'win32':
-        bases = []  # (folder that may hold KiCad\, source, list it in `searched`)
+        bases = []
         for var in ('ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432'):
             if env.get(var):
                 bases.append((env[var], 'Program Files', True))
@@ -500,7 +441,7 @@ def _gather(platform=None, env=None, home=None, which=None, registry=None, drive
         bases.append((os.path.join(local, 'Programs'), 'per-user install', True))
         if drives is None:
             drives = _windows_drives() if sys.platform == 'win32' else []
-        for d in drives:  # X:\Program Files\KiCad, X:\Program Files (x86)\KiCad, X:\KiCad
+        for d in drives:
             bases += [(os.path.join(d, 'Program Files'), 'Program Files', False),
                       (os.path.join(d, 'Program Files (x86)'), 'Program Files', False), (d, 'Program Files', False)]
         seen = set()
@@ -552,7 +493,7 @@ def _existing(items):
     out, seen = [], set()
     for cli, source in items:
         if isinstance(cli, str):
-            if not os.path.isfile(cli):  # isfile, not os.access(X_OK): that lies on Windows
+            if not os.path.isfile(cli):
                 continue
             key = os.path.normcase(os.path.realpath(cli))
         else:
@@ -564,13 +505,10 @@ def _existing(items):
 
 
 def candidate_paths(platform=None, env=None, home=None, **kw):
-    """Ordered [(cli, source)] of kicad-cli candidates that exist on disk (not yet run).
-    cli is a path, or an argv list for flatpak. Extra keywords (for tests): which, registry, drives, root."""
     return _existing(_gather(platform, env, home, **kw)[0])
 
 
 def _gui_for(cli, platform):
-    """The KiCad app next to a kicad-cli path (whether or not kicad-cli exists), or None."""
     if not isinstance(cli, str):
         return '%s (flatpak)' % FLATPAK_ID if cli and FLATPAK_ID in cli else None
     d = os.path.dirname(cli)
@@ -582,7 +520,6 @@ def _gui_for(cli, platform):
 
 
 def _gui_version(gui, platform):
-    """Best guess at the KiCad version of an app without kicad-cli ('6.0'), or None."""
     if platform == 'darwin' and gui.endswith('.app'):
         try:
             with open(os.path.join(gui, 'Contents', 'Info.plist'), 'rb') as f:
@@ -600,7 +537,6 @@ def _gui_version(gui, platform):
 
 
 def _detect(platform=None, env=None, home=None, **kw):
-    """Run detection. Returns (public dict, cli-or-argv for running it)."""
     platform = platform or sys.platform
     items, searched, notes = _gather(platform, env, home, **kw)
     problems, old, best = list(notes), [], None
@@ -614,7 +550,7 @@ def _detect(platform=None, env=None, home=None, **kw):
             old.append((ver, cli))
             continue
         entry = {'cli': cli, 'version': ver, 'major': major, 'source': source}
-        if source in OVERRIDE_SOURCES:  # something the user chose wins outright
+        if source in OVERRIDE_SOURCES:
             best = entry
             break
         if best is None or version_tuple(ver) > version_tuple(best['version']):
@@ -649,7 +585,7 @@ def _detect(platform=None, env=None, home=None, **kw):
     return result, None
 
 
-_detected = None                      # (public dict, cli) from the last detection
+_detected = None
 _state_lock = threading.Lock()
 _refresh_lock = threading.Lock()
 
@@ -659,7 +595,6 @@ def _public(d):
 
 
 def refresh_kicad():
-    """Look for KiCad again (after an install, or when the user asks) and cache the result."""
     global _detected
     with _refresh_lock:
         _version_cache.clear()
@@ -670,9 +605,6 @@ def refresh_kicad():
 
 
 def detect_kicad(**kw):
-    """KiCad detection: {found, cli, version, major, source, gui, problem, searched}.
-    Without arguments the result is cached (refresh_kicad() re-detects). With arguments
-    (platform, env, home, which, registry, drives, root) it runs fresh and is not cached."""
     if kw:
         return _detect(**kw)[0]
     with _state_lock:
@@ -681,14 +613,12 @@ def detect_kicad(**kw):
 
 
 def find_cli():
-    """The validated kicad-cli (path, or argv list for flatpak) from the cache, or None."""
     detect_kicad()
     with _state_lock:
         return _detected[1] if _detected else None
 
 
 def describe_kicad(info):
-    """Console lines (ASCII text) summarising a detection result."""
     if info['found']:
         return ['KiCad %s found (%s): %s' % (info['version'], info['source'], info['cli'])]
     lines = [info['problem'] or 'KiCad was not found on this computer.']
@@ -696,8 +626,6 @@ def describe_kicad(info):
         lines.append('Looked in: ' + ', '.join(info['searched']))
     return lines
 
-
-# ------------------------------------------------------------ "Locate KiCad" picker
 
 class PickerUnavailable(Exception):
     pass
@@ -708,8 +636,6 @@ class PickerBusy(Exception):
 
 
 class MainThreadRunner:
-    """Runs callables on the thread that calls run_pending() (the main thread).
-    Tk dialogs must run on the main thread on macOS."""
 
     def __init__(self):
         self._q = queue.Queue()
@@ -720,7 +646,7 @@ class MainThreadRunner:
         def task():
             try:
                 box['value'] = fn()
-            except BaseException as e:  # hand it back to the caller's thread
+            except BaseException as e:
                 box['error'] = e
             finally:
                 done.set()
@@ -750,20 +676,18 @@ _tk_ok = None
 
 
 def set_ui_runner(runner):
-    """Route file pickers through runner (a MainThreadRunner driven by the main thread)."""
     global _ui_runner
     _ui_runner = runner
 
 
 def picker_available():
-    """True if a native file picker can be shown here (tkinter plus a display)."""
     global _tk_ok
     if sys.platform not in ('win32', 'darwin') and not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
         return False
     if _tk_ok is None:
         try:
-            import tkinter  # noqa: F401
-            import tkinter.filedialog  # noqa: F401
+            import tkinter
+            import tkinter.filedialog
             _tk_ok = True
         except Exception:
             _tk_ok = False
@@ -806,8 +730,6 @@ def _tk_pick():
 
 
 def pick_kicad_path():
-    """Show a native file picker on this computer. Returns the chosen path, or None if cancelled.
-    Raises PickerUnavailable (no tkinter / no display) or PickerBusy (one is already open)."""
     if not picker_available():
         raise PickerUnavailable('No file picker is available on this computer (tkinter or a display is missing).')
     if not _pick_lock.acquire(blocking=False):
@@ -822,8 +744,6 @@ def pick_kicad_path():
 
 
 def locate_kicad(path, platform=None):
-    """Check a path the user picked or typed. If it leads to a working kicad-cli (KiCad 7+),
-    save it as the setting and refresh detection. Returns (ok, message)."""
     platform = platform or sys.platform
     exe = _cli_name(platform)
     clis = resolve_kicad_path(path, platform, up=2)
@@ -846,8 +766,6 @@ def locate_kicad(path, platform=None):
     return False, errors[0]
 
 
-# ------------------------------------------------------------ KiCad install
-
 DOWNLOAD_PAGES = {
     'win32': 'https://www.kicad.org/download/windows/',
     'darwin': 'https://www.kicad.org/download/macos/',
@@ -857,7 +775,6 @@ _install_lock = threading.Lock()
 
 
 def install_plan():
-    """(command or None, manual download page, human description) for this OS."""
     url = DOWNLOAD_PAGES.get(sys.platform, 'https://www.kicad.org/download/linux/')
     if sys.platform == 'win32':
         winget = shutil.which('winget')
@@ -877,9 +794,6 @@ def install_status():
 
 
 def start_install(open_page=True):
-    """Install KiCad in the background. Returns the status right after starting.
-    Without a package manager, opens the official download page instead.
-    Detection is re-run when the installer finishes."""
     with _install_lock:
         if _install['state'] == 'running':
             return dict(_install)
@@ -919,12 +833,7 @@ def start_install(open_page=True):
     return install_status()
 
 
-# ------------------------------------------------------------ HTTP
-
-# ------------------------------------------------- finalize: open in KiCad
-
 def documents_dir():
-    """Where finalized projects are saved: Documents/GFLUX/<name>."""
     override = os.environ.get('GFLUX_PROJECTS')
     if override:
         return override
@@ -934,16 +843,14 @@ def documents_dir():
 
 
 def editor_command(tool, path, cli=None, platform=None):
-    """argv that opens `path` in KiCad's schematic ('eeschema') or PCB ('pcbnew') editor."""
     platform = platform or sys.platform
     cli = cli if cli is not None else find_cli()
     if not cli:
         return None
-    if isinstance(cli, (list, tuple)):  # flatpak
+    if isinstance(cli, (list, tuple)):
         return [a if not a.startswith('--command=') else '--command=' + tool for a in cli] + [path]
     bindir = os.path.dirname(cli)
     if platform == 'darwin':
-        # .../KiCad.app/Contents/MacOS/kicad-cli -> .../KiCad.app/Contents/Applications/Eeschema.app
         app = os.path.join(os.path.dirname(bindir), 'Applications', tool.capitalize() + '.app')
         return ['open', '-a', app, path] if os.path.isdir(app) else ['open', path]
     exe = os.path.join(bindir, tool + ('.exe' if platform == 'win32' else ''))
@@ -954,19 +861,17 @@ def editor_command(tool, path, cli=None, platform=None):
 
 
 def launch(argv):
-    """Start a program without waiting for it or tying it to this console."""
-    if os.environ.get('GFLUX_NO_LAUNCH'):  # tests
+    if os.environ.get('GFLUX_NO_LAUNCH'):
         return
     kw = {'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL}
     if sys.platform == 'win32':
-        kw['creationflags'] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+        kw['creationflags'] = 0x00000008 | 0x00000200
     else:
         kw['start_new_session'] = True
     subprocess.Popen(argv, **kw)
 
 
 def open_in_kicad(data):
-    """Save the project under Documents/GFLUX/<name> and open its schematic and PCB in KiCad."""
     name = safe_name(data.get('name'))
     for key in ('sch', 'pcb'):
         if not isinstance(data.get(key), str) or not data[key].strip():
@@ -977,7 +882,7 @@ def open_in_kicad(data):
     if isinstance(data.get('pro'), str):
         files[name + '.kicad_pro'] = data['pro']
     if isinstance(data.get('ino'), str):
-        files[os.path.join(name, name + '.ino')] = data['ino']  # Arduino wants a matching folder
+        files[os.path.join(name, name + '.ino')] = data['ino']
     for rel, text in files.items():
         path = os.path.join(folder, rel)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -1000,7 +905,6 @@ def open_in_kicad(data):
 
 
 def health(launcher=False):
-    """What the web page shows. ok/bridge/version keep their old meaning."""
     d = detect_kicad()
     h = {'ok': d['found'], 'bridge': True, 'launcher': bool(launcher),
          'version': d['version'], 'major': d['major'], 'cli': d['cli'], 'source': d['source'],
@@ -1029,13 +933,10 @@ class Handler(SimpleHTTPRequestHandler):
         if self.path.startswith('/api/'):
             self.send_header('Cache-Control', 'no-store')
         else:
-            # Always ask before reusing a cached page file, so a new GFLUX
-            # never runs with the old version's scripts.
             self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
 
     def log_message(self, fmt, *args):
-        # Keep the console readable: only report failures.
         if len(args) > 1 and str(args[1])[:1] in '45':
             sys.stderr.write('%s\n' % (fmt % args))
 
@@ -1053,7 +954,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def same_origin(self):
-        """True for requests from the page this bridge serves (or non-browser clients)."""
         origin = self.headers.get('Origin')
         if not origin:
             return True
@@ -1061,7 +961,6 @@ class Handler(SimpleHTTPRequestHandler):
         return origin in ('http://localhost:%d' % port, 'http://127.0.0.1:%d' % port)
 
     def read_json(self, optional=False):
-        """The JSON object in the body ({} if optional and empty). Raises ValueError."""
         try:
             length = int(self.headers.get('Content-Length') or 0)
         except ValueError:
@@ -1100,14 +999,12 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         route = self.path.split('?')[0].rstrip('/')
         if route == '/api/app/quit':
-            # A newer GFLUX asks this one to make way. Never from a web page.
             if self.headers.get('Origin') or not getattr(self.server, 'launcher', False):
                 return self.send_json(403, {'ok': False, 'error': 'not allowed'})
             self.send_json(200, {'ok': True})
             threading.Timer(0.3, lambda: os._exit(0)).start()
             return
         if route in ('/api/arduino/check', '/api/arduino/setup', '/api/arduino/open'):
-            # Compiling and installing run programs on this computer: GFLUX's own page only.
             if not self.same_origin():
                 return self.send_json(403, {'ok': False, 'error': 'this request must come from the GFLUX page itself'})
             import arduino_bridge
@@ -1126,7 +1023,6 @@ class Handler(SimpleHTTPRequestHandler):
             except (OSError, subprocess.SubprocessError) as e:
                 return self.send_json(500, {'ok': False, 'error': 'could not run arduino-cli: %s' % e})
         if route in ('/api/kicad/install', '/api/kicad/recheck', '/api/kicad/locate', '/api/kicad/open'):
-            # Only GFLUX's own page may install, re-scan or open a picker, never another website.
             if not self.same_origin():
                 return self.send_json(403, {'ok': False, 'error': 'this request must come from the GFLUX page itself'})
             if route == '/api/kicad/install':
@@ -1165,7 +1061,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(400, {'ok': False, 'error': str(e)})
         except CliError as e:
             return self.send_json(500, {'ok': False, 'error': str(e), 'stderr': e.stderr})
-        except Exception as e:  # keep the server alive and tell the page what happened
+        except Exception as e:
             return self.send_json(500, {'ok': False, 'error': '%s: %s' % (type(e).__name__, e)})
         suffix = '-schematic' if route.endswith('schematic') else '-pcb'
         self.send_response(200)
@@ -1176,7 +1072,6 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(blob)
 
     def locate(self):
-        """POST /api/kicad/locate [{path}]: without a path, open a file picker on this computer."""
         try:
             path = self.read_json(optional=True).get('path')
         except (ValueError, UnicodeDecodeError) as e:
@@ -1198,7 +1093,6 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def site_version(root):
-    """Fingerprint of the site files, so two GFLUX apps can tell if they match."""
     h = hashlib.sha1()
     for folder, dirs, files in os.walk(root):
         dirs[:] = sorted(d for d in dirs if d not in ('build', 'dist', 'tools', '.git'))
@@ -1212,8 +1106,6 @@ def site_version(root):
 
 
 def make_server(host='127.0.0.1', port=8765, root=None, launcher=False):
-    """HTTP server for the GFLUX site (root) plus the KiCad API.
-    launcher=True when running inside the GFLUX app (reported by /api/kicad/health)."""
     Handler.extensions_map.update({'.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml'})
     httpd = ThreadingHTTPServer((host, port), partial(Handler, directory=root or ROOT))
     httpd.daemon_threads = True
@@ -1233,7 +1125,7 @@ def main():
     for line in describe_kicad(info):
         print('KiCad:  ' + line)
     sys.stdout.flush()
-    runner = MainThreadRunner()  # file pickers run here, on the main thread
+    runner = MainThreadRunner()
     set_ui_runner(runner)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     try:

@@ -1,11 +1,8 @@
-/* GFLUX code editor: the right-hand "Code" panel. A plain sketch editor with
- * line numbers, the four example projects, starter code, and Check (instant
- * checks while you type, the real Arduino compiler on demand). */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.codeEditor = (function () {
   let area = null, gutter = null, typing = null;
-  let starterShown = ''; // starter code the user has not edited yet
+  let starterShown = '';
   const app = () => GFLUX.app || {};
 
   function h(tag, attrs, kids) {
@@ -25,7 +22,6 @@ GFLUX.codeEditor = (function () {
     gutter.scrollTop = area.scrollTop;
   }
 
-  /** Keep the sketch in the project (saved with it) and re-run the quick checks. */
   function changed(checkNow) {
     updateGutter();
     const st = app().state;
@@ -56,7 +52,6 @@ GFLUX.codeEditor = (function () {
     app().toast(`Example "${ex.title}" loaded: the circuit is wired and the sketch is in the editor.`);
   }
 
-  /** Select line `n` in the editor (from the check popup). */
   function goto(n) {
     if (!area) return;
     const lines = area.value.split('\n');
@@ -78,13 +73,13 @@ GFLUX.codeEditor = (function () {
     area.addEventListener('input', () => changed(false));
     area.addEventListener('scroll', () => { gutter.scrollTop = area.scrollTop; });
     area.addEventListener('keydown', (e) => {
-      if (e.key === 'Tab') { // indent instead of leaving the editor
+      if (e.key === 'Tab') {
         e.preventDefault();
         const s = area.selectionStart;
         area.setRangeText('  ', s, area.selectionEnd, 'end');
         changed(false);
       }
-      e.stopPropagation(); // editor keys never reach the canvas shortcuts
+      e.stopPropagation();
     });
     root.append(
       h('div', { class: 'ed-head' }, [h('span', { class: 'ed-title', text: 'Code' }), h('span', { class: 'ed-sub', text: 'Arduino sketch for your ESP32' })]),
@@ -98,7 +93,6 @@ GFLUX.codeEditor = (function () {
     load(app().state);
   }
 
-  /** A different project was loaded: show its sketch. */
   function load(state) {
     if (!area) return;
     let code = state && state.code;

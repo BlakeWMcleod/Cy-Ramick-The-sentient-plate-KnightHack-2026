@@ -1,16 +1,10 @@
-/* GFLUX finalize checks: everything that would stop the circuit working,
- * each as a very short message ("GND touched PWR",
- * "Missing connection [SDA] on Text screen"). */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.check = (function () {
   const DRIVEN = /^(TRIG|IN|IN\d|DIN|CS|CLK|SCK|MOSI|RST|SCL|R|G|B|ENA|ENB|LRC|BCLK|RX|XSHUT|SIG|SD)$/;
-  // Module pins that send a signal back to the ESP32 (at the module's supply voltage).
   const OUTPUTS = /^(ECHO|OUT|DO|AO|AOUT|TX|DT|VRX|VRY|SW|MISO|INT|SQW|BUSY|DOUT|GPIO1|IRQ|DATA)$/;
   const fmt = (v) => GFLUX.formatVolts(v);
 
-  /** -> [{ level: 'error' | 'warn', kind: 'fault' | 'missing', text, uid? }], errors first.
-   *  'fault' = something wired wrong (shown live); 'missing' = not wired yet (shown on Finalize). */
   function run(state) {
     const out = [], seen = new Set();
     const add = (level, text, uid) => {
@@ -26,8 +20,6 @@ GFLUX.check = (function () {
 
     if (!state.parts.some((p) => GFLUX.getPart(p.type).controller)) add('error', 'No ESP32 board');
 
-    // Voltage on every net that has a supply. Soft supplies (ESP32 VIN) only
-    // count when nothing else powers the net.
     const roleList = (net) => net.pins.map((p) => ({ p, inst: byUid.get(p.uid), def: GFLUX.getPart(byUid.get(p.uid).type), role: GFLUX.pinRole(byUid.get(p.uid), p.pin), name: pinName(p) }));
     const netInfo = new Map();
     for (const net of nl.nets) {
@@ -38,14 +30,12 @@ GFLUX.check = (function () {
       netInfo.set(net, { roles, hard, volts, v: volts.length === 1 ? volts[0] : null });
     }
     const isPowerIn = (r) => !r.def.passive && !r.role.source && (r.def.pins.find((q) => q.num === r.p.pin).kind === 'v5' || r.def.pins.find((q) => q.num === r.p.pin).kind === 'v3');
-    // Each part's supply voltage (for signals it sends back).
     const supplyOf = new Map();
     for (const info of netInfo.values()) {
       if (info.v == null) continue;
       for (const r of info.roles) if (isPowerIn(r)) supplyOf.set(r.p.uid, Math.max(supplyOf.get(r.p.uid) || 0, info.v));
     }
 
-    // Shorts, clashes and wrong voltages, net by net.
     for (const net of nl.nets) {
       const { roles, hard, volts, v } = netInfo.get(net);
       const rails = new Set(roles.map((r) => r.role.rail).filter(Boolean));
@@ -56,14 +46,12 @@ GFLUX.check = (function () {
       else if (hard.length > 1) add('warn', 'Two supplies joined');
       if (v != null) {
         for (const r of roles) {
-          // Supply range of each powered part (ESP32 VIN too, once something else feeds it).
           const range = r.role.source ? (r.role.soft && hard.length && r.def.vin && r.def.vin[r.name]) : (isPowerIn(r) && r.def.volts);
           if (!range) continue;
           const label = r.role.soft ? `${r.def.name} ${r.name}` : r.def.name;
           if (v > range[1] + 0.05) add('error', `${fmt(v)} too high [${label}]`, r.p.uid);
           else if (v < range[0] - 0.05) add('warn', `${fmt(v)} too low [${label}]`, r.p.uid);
         }
-        // Buck / boost converters: input must suit the output they're set to.
         for (const r of roles) {
           if (!r.def.converter || r.name !== 'IN+') continue;
           const out = r.inst.vout != null ? +r.inst.vout : r.def.vout;
@@ -78,7 +66,6 @@ GFLUX.check = (function () {
       if (powerIn && gpios.length && !rails.size) add('warn', `GPIO powering ${powerIn.def.name}`);
       const ctl = gpios[0];
       if (ctl && ctl.def.inputOnly && ctl.def.inputOnly.includes(ctl.name) && roles.some((r) => !r.role.controller && DRIVEN.test(r.name))) add('error', `${ctl.name} can't output`);
-      // I2C wires crossed (module SDA on the board's SCL pin or the other way round).
       if (ctl && ctl.def.i2c) {
         for (const r of roles) {
           if (r.role.controller || !/^(SDA|SCL)$/.test(r.name)) continue;
@@ -86,7 +73,6 @@ GFLUX.check = (function () {
           if (ctl.role.gpio === ctl.def.i2c[other]) add('error', `SDA/SCL swapped [${r.def.name}]`);
         }
       }
-      // 5 V signals into a 3.3 V ESP32 pin.
       for (const r of roles) {
         if (!gpios.length || r.role.controller || r.def.out3v3 || !OUTPUTS.test(r.name)) continue;
         const sv = supplyOf.get(r.p.uid);
@@ -94,7 +80,6 @@ GFLUX.check = (function () {
       }
     }
 
-    // Converters set outside what they can do.
     for (const inst of state.parts) {
       const def = GFLUX.getPart(inst.type);
       if (!def.converter || inst.vout == null) continue;
@@ -102,14 +87,12 @@ GFLUX.check = (function () {
       if (inst.vout < lo || inst.vout > hi) add('error', `${def.name} set to ${fmt(inst.vout)}`, inst.uid);
     }
 
-    // LEDs straight onto a GPIO or supply.
     for (const inst of state.parts) {
       if (inst.type !== 'led') continue;
       const net = nl.byPin.get(GFLUX.pinKey(inst.uid, '1'));
       if (net && (net.gpio != null || net.rails.some((r) => r !== 'GND'))) add('error', 'LED needs resistor', inst.uid);
     }
 
-    // Missing connections: power, ground and every pin the code uses.
     const linked = (uid, num) => { const n = nl.byPin.get(GFLUX.pinKey(uid, num)); return !!n && n.pins.length > 1; };
     for (const inst of state.parts) {
       const def = GFLUX.getPart(inst.type);
@@ -135,7 +118,6 @@ GFLUX.check = (function () {
       for (const p of need) if (!linked(inst.uid, p.num)) add('error', `Missing connection [${p.name}] on ${def.name}`, inst.uid);
     }
 
-    // Wires that end on nothing.
     const ends = new Map();
     for (const w of state.wires) for (const e of [w.a, w.b]) if (!GFLUX.isPinEnd(e)) { const k = e.x + ',' + e.y; ends.set(k, (ends.get(k) || 0) + 1); }
     const loose = Array.from(ends.values()).filter((n) => n === 1).length;
@@ -144,7 +126,6 @@ GFLUX.check = (function () {
     return out.sort((a, b) => (a.level === b.level ? 0 : a.level === 'error' ? -1 : 1));
   }
 
-  /** Shopping list: one row per part type with a count and its Amazon link. */
   function shoppingList(state) {
     const rows = new Map();
     for (const inst of state.parts) {

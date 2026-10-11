@@ -10,8 +10,6 @@ on:
 permissions:
   contents: write
 
-# Only the newest push publishes; older in-progress builds are cancelled so
-# the download page never ends up with an older app.
 concurrency:
   group: gflux-app-${{ github.ref }}
   cancel-in-progress: true
@@ -53,7 +51,6 @@ jobs:
           path: gflux/dist/${{ matrix.asset }}
 
   release:
-    # Keep one always-current download page: Releases -> "GFLUX (latest build)".
     needs: build
     runs-on: ubuntu-latest
     steps:

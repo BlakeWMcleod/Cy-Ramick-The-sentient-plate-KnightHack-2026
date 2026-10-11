@@ -1,6 +1,3 @@
-/* GFLUX code checks: instant checks in the browser, plus the real Arduino
- * compiler through the GFLUX app. Results show in a small popup with very
- * short messages ("Missing ; · line 12"). Also the four example projects. */
 window.GFLUX = window.GFLUX || {};
 
 GFLUX.codecheck = (function () {
@@ -8,16 +5,13 @@ GFLUX.codecheck = (function () {
   const app = () => GFLUX.app || {};
   const INPUT_ONLY = [34, 35, 36, 39];
 
-  /** Code with comments and strings blanked out (same length, same lines). */
   function strip(src) {
     return src.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'/g, (m) => m.replace(/[^\n]/g, ' '));
   }
   const lineAt = (src, i) => src.slice(0, i).split('\n').length;
 
-  /** Fast checks that need no compiler. */
   function quick(src, state) {
     const out = [], code = strip(src);
-    // Brackets.
     const stack = [], pairs = { ')': '(', ']': '[', '}': '{' };
     for (let i = 0; i < code.length; i++) {
       const ch = code[i];
@@ -33,7 +27,6 @@ GFLUX.codecheck = (function () {
     if (/\bSerial\.(print|println|printf|write)\b/.test(code) && !/\bSerial\.begin\s*\(/.test(code)) {
       out.push({ level: 'warn', line: lineAt(code, code.search(/\bSerial\.(print|println|printf|write)\b/)), text: 'Serial.begin missing' });
     }
-    // Pins: numbers, or names set by `const int X = 5` / `#define X 5`.
     const names = {};
     for (const m of code.matchAll(/\b(?:const\s+)?(?:int|uint8_t|byte|short|long)\s+(\w+)\s*=\s*(\d+)\s*[;,]/g)) names[m[1]] = +m[2];
     for (const m of code.matchAll(/#define\s+(\w+)\s+(\d+)\b/g)) names[m[1]] = +m[2];
@@ -54,13 +47,11 @@ GFLUX.codecheck = (function () {
     return out;
   }
 
-  /** Library Manager name for a header file, e.g. 'ESP32Servo.h' -> 'ESP32Servo'. */
   function libFor(header) {
     if (!GFLUX.codegen || !GFLUX.codegen.libraryFor) return null;
     return GFLUX.codegen.libraryFor(`#include <${String(header).split('/').pop()}>`);
   }
 
-  /** Compiler message -> a few words. */
   function shorten(it) {
     let line = it.line, m;
     const t = it.msg;
@@ -68,7 +59,7 @@ GFLUX.codecheck = (function () {
     if ((m = /expected [^']*'([^']+)'(?: or '([^']+)')? (?:before|at)/.exec(t))) {
       const tok = [m[1], m[2]].includes(';') ? ';' : (m[2] || m[1]);
       text = `Missing ${tok}`;
-      if (it.col <= 1 && line > 1) line -= 1; // reported at the start of the next line
+      if (it.col <= 1 && line > 1) line -= 1;
     } else if ((m = /'([^']+)' was not declared in this scope/.exec(t))) text = `${m[1]} not declared`;
     else if ((m = /'([^']+)' does not name a type/.exec(t))) text = `${m[1]} unknown (missing #include?)`;
     else if ((m = /([\w./-]+\.h(?:pp)?): No such file/.exec(t))) {
@@ -84,8 +75,6 @@ GFLUX.codecheck = (function () {
     else text = t.replace(/\s*\[-W[\w-]+\]$/, '').split(/\s+/).slice(0, 6).join(' ');
     return { level: it.level, line, text };
   }
-
-  // ------------------------------------------------------------------- popup
 
   let box = null, lastCode = null, lastCompile = null, busy = false, poll = null;
   function el() {
@@ -127,7 +116,6 @@ GFLUX.codecheck = (function () {
     return board && board.type === 'esp32c3' ? 'esp32:esp32:esp32c3' : 'esp32:esp32:esp32';
   }
 
-  /** While typing: instant checks only. The popup shows up only when something is wrong. */
   let liveShown = false;
   function live(code) {
     if (busy) return;
@@ -144,7 +132,6 @@ GFLUX.codecheck = (function () {
     liveShown = true;
   }
 
-  /** Check `code`: instant checks right away, then the Arduino compiler if the app is here. */
   async function run(code) {
     liveShown = false;
     lastCode = code;
@@ -204,7 +191,6 @@ GFLUX.codecheck = (function () {
     tick().catch(() => {});
   }
 
-  /** Re-run the instant checks when the circuit changes (the compile result stays). */
   let debounce = null;
   function circuitChanged() {
     if (!lastCode || !box || box.hidden || busy) return;
@@ -216,8 +202,6 @@ GFLUX.codecheck = (function () {
       else if (!app().appBase) run(lastCode);
     }, 400);
   }
-
-  // ---------------------------------------------------------------- examples
 
   const EXAMPLES = [
     {
@@ -352,7 +336,6 @@ void loop() {
   const uid = () => 'p' + Math.random().toString(36).slice(2, 9);
   const wid = () => 'w' + Math.random().toString(36).slice(2, 9);
 
-  /** Build an example circuit, wired by the auto-wire planner. -> { state, code, title } */
   function buildExample(i) {
     const ex = EXAMPLES[i];
     const state = { name: ex.title.toLowerCase().replace(/\W+/g, '-'), parts: [{ uid: uid(), type: 'esp32', x: 0, y: 0, rot: 0 }], wires: [], custom: [] };
@@ -368,7 +351,6 @@ void loop() {
         } else state.wires.push({ id: wid(), a: ctl, b: mine, color: 'auto', via: [] });
       }
     }
-    // Pin numbers for the sketch, looked up from the wiring.
     const nl = GFLUX.buildNets(state), pins = {};
     for (const inst of state.parts) {
       const def = GFLUX.getPart(inst.type);
@@ -376,7 +358,6 @@ void loop() {
       pins[inst.type] = {};
       for (const p of def.pins) pins[inst.type][p.name] = GFLUX.gpioFor(state, nl, inst.uid, p.num);
     }
-    // Colours: a rainbow out of the board, black ground, red power.
     const rainbow = ['R', 'O', 'Y', 'G', 'B', 'I', 'V'];
     let n = 0;
     for (const w of state.wires) {
