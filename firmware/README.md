@@ -1,0 +1,91 @@
+# Sentient plate firmware
+
+The ESP32 firmware and wiring notes for the Cy-Ramick sentient plate hackathon project.
+
+## Firmware (`firmware/sentient_plate/sentient_plate.ino`)
+
+The plate talks continuously. Each clip is chosen from the SD-card folder that matches the plate's current orientation, and changes in orientation fade the current clip out before fading the next one in.
+
+### Hardware
+
+| Part | ESP32 pin |
+| --- | --- |
+| DFPlayer Mini RX (pin 2) | GPIO 17 (TX2) |
+| DFPlayer Mini TX (pin 3) | GPIO 16 (RX2) |
+| DFPlayer Mini BUSY (pin 16) | GPIO 4 |
+| GY-521 (MPU-6050) SDA / SCL | GPIO 21 / GPIO 22 |
+| TCRT5000 sensors 1–5, DO | GPIO 32, 33, 25, 26, 27 |
+| Button 1 (wait for lift), other leg to GND | Any of GPIO 0 (BOOT button), 12, 14, 18 |
+| Button 2 (mute), other leg to GND | Any of GPIO 5, 13, 15, 19, 23 |
+
+The five TCRT5000 sensors face down at the table from the rim of the enclosure. When all of them see the table, the plate is resting. When none of them do, it has been lifted. When only some do, it is hanging over the edge of the table.
+
+Switch the plate on while it rests flat on the table. At boot, the firmware records that orientation as "flat" and reads each IR sensor's output level as its "sees the table" level, so the sensor polarity does not need to be known in advance.
+
+### Buttons
+
+Every spare even-numbered GPIO acts as button 1 and every spare odd-numbered GPIO as button 2, so touching any of those pins to GND works as a press. The board's BOOT button (GPIO 0) is also button 1. Pins already in use, the flash pins (6–11), USB serial (1, 3), the onboard LED (2) and the input-only pins (34–39) are excluded.
+
+- **Button 1 – wait for lift:** fades the plate to silence. It stays quiet until it has been set on the table and then lifted off it, at which point it starts talking again. Press again to cancel.
+- **Button 2 – mute:** toggles mute. Unmuting fades a new clip in.
+
+### SD card layout
+
+| Folder | Situation |
+| --- | --- |
+| `01` | On the edge of a table |
+| `02` | Flat (resting on the table, or lifted and held level) |
+| `03` – `10` | Tilted 15–35°, 35–55°, 55–75°, 75–95°, 95–115°, 115–140°, 140–165°, 165–180° |
+
+Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … inside each numbered folder (not the `/mp3` folder), and copy them in order. Install the **DFRobotDFPlayerMini** library from the Arduino Library Manager before compiling.
+
+## Hardware self-test (`firmware/plate_selftest/plate_selftest.ino`)
+
+Upload this sketch to check every part before installing the main firmware. Copy `Beep.mp3` and then `Metal Beep.mp3`, in that order, to the root of an empty SD card. The DFPlayer numbers root files by copy order.
+
+1. Set the plate flat on the table and switch it on.
+2. **Two beeps:** pick the plate up, tilt it onto its side, and set it back down within 15 s.
+3. **Two beeps:** press button 1. **Two beeps:** press button 2. One beep confirms each step.
+4. **One beep and a steady blue LED:** everything passed. Otherwise each failure plays **metal beeps** for the error code, followed by normal beeps for the sensor or button number.
+5. Press either button afterwards to hear the result again.
+
+| Code | Problem | Check |
+| --- | --- | --- |
+| 1 | DFPlayer not responding (LED blinks only) | DFPlayer TX/RX wires and power (D2) |
+| 2 | SD card unreadable or fewer than 2 files | FAT32, 32 GB or smaller, both MP3s copied |
+| 3 | DFPlayer BUSY wire | DFPlayer pin 16 to GPIO4 |
+| 4 | MPU-6050 not found | SDA GPIO21, SCL GPIO22, 3V3, GND |
+| 5 | MPU-6050 bad data: .1 gravity wrong, .2 frozen, .3 no tilt seen | Wiring, or a damaged module |
+| 6.n | IR sensor *n* wire disconnected | DO wire to its GPIO |
+| 7.n | IR sensor *n* did not react when lifted | VCC/GND, or turn its trimpot |
+| 8.n | Button *n* stuck pressed | Shorted to GND |
+| 9.n | Button *n* not pressed during the test | Wiring, or not installed yet |
+| 10 | Last restart was a brownout | Weak batteries or power wiring (D1, VIN) |
+
+Results are saved in the ESP32's flash. The previous report is printed on Serial (115200 baud) at every start, and holding button 1 while switching on replays it without re-testing (use GPIO 12, 14 or 18 for this; holding BOOT at power-on enters upload mode). Buttons follow the same even/odd pin rule as the main firmware.
+
+## Enclosure (`enclosure/`)
+
+`make_enclosure.py` generates the round 3D-printed tray and lid (140 mm across, 24.3 mm tall) that sit under the plate, along with stand-in blocks for every component. All dimensions are parameters at the top of the script.
+
+| File | Contents |
+| --- | --- |
+| `tray.stl`, `lid.stl` | Print files in mm. Print the tray floor-down; the lid is already flipped tabs-up. No supports. |
+| `plate_enclosure.blend` | Assembled model with component stand-ins (not printed). |
+| `preview_inside.png`, `preview_outside.png` | Renders with the lid off and on. |
+
+To cut print time, the outer wall is a closed 1.6 mm shell (4 perimeters with a 0.4 mm nozzle). The floor is open wherever nothing rests on it, keeping solid pads under each part plus a rim and radial ribs, and the lid is a 5 mm ring with locating tabs. At 140 mm this uses 43.1 cm³ of plastic, about 45% less than the original 156 mm solid design. Set `FLOOR_CUTOUTS = False` or `LID_RING_W = 0` to return to a solid floor or lid.
+
+Rebuild after changing a parameter (run in the `enclosure` folder):
+
+```
+"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python make_enclosure.py
+```
+
+The script checks that no component hits a wall, the lid, or another component, and that both print parts are watertight. It prints `CHECK: OK` when everything passes.
+
+Before printing:
+
+- Measure the inside diameter of the plate's foot ring and set `PLATE_FOOT_RING_ID`. The enclosure needs about 2 mm of clearance.
+- The layout is packed for the smallest size: the ESP32 sits on the left with its USB-C port in the wall, the battery holder is turned 90° on the right, the speaker vents face the front-left, and the two buttons are in the back wall. The five IR sensors are spread no more than 80° apart around the rim. Some parts are only a fraction of a millimetre apart, so plan wire routes before gluing. Increase `R` for more wiring room and rerun the checks.
+- Hold a TCRT5000 module against its floor window. If the window is off-centre, adjust `IR_SENSOR_U` and rebuild.

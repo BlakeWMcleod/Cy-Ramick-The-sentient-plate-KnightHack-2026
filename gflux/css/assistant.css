@@ -45,7 +45,7 @@
   flex: none;
   margin: 0 12px 8px;
   border: 2px solid var(--as-line);
-  border-radius: var(--as-radius);
+  border-radius: 0;
   background: var(--as-surface-2);
 }
 .gx-assistant .gx-as-settings > summary {
@@ -70,13 +70,13 @@
   margin-right: 2px;
 }
 .gx-assistant .gx-as-settings[open] > summary::before { transform: rotate(45deg); }
-.gx-assistant .gx-as-settings > summary:focus-visible { outline: 2px solid var(--as-accent); outline-offset: 2px; border-radius: var(--as-radius); }
+.gx-assistant .gx-as-settings > summary:focus-visible { outline: 2px solid var(--as-accent); outline-offset: 2px; border-radius: 0; }
 .gx-assistant .gx-as-status {
   margin-left: auto;
   font-size: 11px;
   font-weight: 700;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: 0;
   background: var(--as-surface);
   border: 2px solid var(--as-line);
   color: var(--as-ink-2);
@@ -90,7 +90,7 @@
   font: 13px var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   padding: 7px 9px;
   border: 2px solid var(--as-line);
-  border-radius: calc(var(--as-radius) * 0.7);
+  border-radius: 0;
   background: var(--as-surface);
   color: var(--as-ink);
 }
@@ -118,7 +118,7 @@
   min-width: 0;
   max-width: 100%;
   padding: 9px 12px;
-  border-radius: var(--as-radius);
+  border-radius: 0;
   border: 2px solid var(--as-line);
   background: var(--as-surface-2);
   overflow-wrap: anywhere;
@@ -146,7 +146,7 @@
 .gx-assistant .gx-bubble :not(pre) > code {
   font: 0.92em var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: 0;
   background: var(--as-surface);
   border: 1px solid var(--as-line);
 }
@@ -154,7 +154,7 @@
 /* code blocks are always dark */
 .gx-assistant .gx-code {
   margin: 6px 0 10px;
-  border-radius: calc(var(--as-radius) * 0.8);
+  border-radius: 0;
   background: var(--as-code-bg);
   color: var(--as-code-ink);
   overflow: hidden;
@@ -178,7 +178,7 @@
 .gx-assistant .gx-code-btn {
   font: 700 12px var(--font-ui, system-ui, sans-serif);
   padding: 4px 9px;
-  border-radius: 7px;
+  border-radius: 0;
   border: 1px solid #4a4f63;
   background: #343849;
   color: #f2f2f2;
@@ -222,7 +222,7 @@
   background: var(--as-surface-2);
   border: 1px solid var(--as-line);
   border-left: 7px solid var(--chip);
-  border-radius: 4px 999px 999px 4px;
+  border-radius: 0;
   padding: 4px 11px 4px 8px;
   cursor: pointer;
   text-align: left;
@@ -258,7 +258,7 @@
   font: 14px/1.4 var(--font-ui, system-ui, sans-serif);
   padding: 9px 11px;
   border: 2px solid var(--as-line);
-  border-radius: var(--as-radius);
+  border-radius: 0;
   background: var(--as-surface);
   color: var(--as-ink);
 }
@@ -273,7 +273,7 @@
   gap: 6px;
   font: 800 13px var(--font-ui, system-ui, sans-serif);
   padding: 8px 14px;
-  border-radius: var(--as-radius);
+  border-radius: 0;
   border: 2px solid transparent;
   cursor: pointer;
   transition: transform 0.08s, box-shadow 0.08s;
@@ -292,7 +292,7 @@
 .gx-assistant .gx-btn-ghost::before {
   content: "";
   width: 10px; height: 10px;
-  border-radius: 3px;
+  border-radius: 0;
   background: linear-gradient(90deg, var(--wR, #e53935) 0 33%, var(--wY, #fdd835) 33% 66%, var(--wB, #1e88e5) 66%);
 }
 

@@ -88,7 +88,7 @@ GFLUX.rules = (function () {
       if (!adj.has(k2)) adj.set(k2, []);
       adj.get(k1).push([k2, w]); adj.get(k2).push([k1, w]);
     };
-    for (const w of state.wires) link(GFLUX.pinKey(w.a.part, w.a.pin), GFLUX.pinKey(w.b.part, w.b.pin), w.id);
+    for (const w of state.wires) link(GFLUX.endKey(w.a), GFLUX.endKey(w.b), w.id);
     for (const inst of state.parts) {
       for (const [p, q] of CONDUCTORS[inst.type] || []) link(GFLUX.pinKey(inst.uid, p), GFLUX.pinKey(inst.uid, q), null);
     }
@@ -118,8 +118,8 @@ GFLUX.rules = (function () {
     const fromSrc = bfs(sources), toGnd = bfs(grounds);
     const out = new Map();
     for (const w of state.wires) {
-      const ka = GFLUX.pinKey(w.a.part, w.a.pin), kb = GFLUX.pinKey(w.b.part, w.b.pin);
-      const net = nl.byPin.get(ka);
+      const ka = GFLUX.endKey(w.a), kb = GFLUX.endKey(w.b);
+      const net = nl.byPin.get(ka) || nl.byPin.get(kb);
       const kind = !net ? 'signal' : net.rails.includes('GND') ? 'ground' : net.rails.some(POSITIVE) ? 'power' : 'signal';
       let dir = 0;
       const da = fromSrc.get(ka), db = fromSrc.get(kb);
