@@ -43,20 +43,78 @@ def get_json(url, timeout=2):
 
 def already_running(port):
     """True if a GFLUX bridge already answers on this port."""
+    return running_site(port) is not None
+
+
+def running_site(port):
+    """Site fingerprint of the GFLUX on this port: '' for an older GFLUX, None if none."""
     try:
-        return get_json('http://127.0.0.1:%d/api/kicad/health' % port, timeout=1).get('bridge') is True
+        return get_json('http://127.0.0.1:%d/api/app' % port, timeout=2).get('site') or ''
+    except urllib.error.HTTPError:
+        pass  # older GFLUX without /api/app
     except Exception:
-        return False
+        return None
+    try:
+        return '' if get_json('http://127.0.0.1:%d/api/kicad/health' % port, timeout=5).get('bridge') is True else None
+    except Exception:
+        return None
+
+
+def port_free(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        if sys.platform != 'win32':  # same as the server, so a just-closed port counts as free
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(('127.0.0.1', port))
+            return True
+        except OSError:
+            return False
+
+
+def stop_old_gflux(port):
+    """Ask the GFLUX on `port` to quit so this version can take its place (same
+    address, so the browser keeps the saved work). True once the port is free."""
+    try:
+        req = urllib.request.Request('http://127.0.0.1:%d/api/app/quit' % port, data=b'{}', method='POST',
+                                     headers={'Content-Type': 'application/json'})
+        urllib.request.urlopen(req, timeout=2).close()
+    except Exception:
+        if sys.platform == 'win32':
+            kill_windows_listener(port)  # older GFLUX versions can't be asked
+    for _ in range(30):
+        if port_free(port):
+            return True
+        threading.Event().wait(0.2)
+    return False
+
+
+def kill_windows_listener(port):
+    """Windows: end the older GFLUX.exe that listens on `port` (only a GFLUX program)."""
+    import subprocess
+    try:
+        out = subprocess.run(['netstat', '-ano', '-p', 'TCP'], capture_output=True, text=True, timeout=10).stdout
+    except Exception:
+        return
+    mine = {os.getpid(), os.getppid()}
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[3] == 'LISTENING' and parts[1].endswith(':%d' % port) and parts[4].isdigit():
+            pid = int(parts[4])
+            if pid in mine:
+                continue
+            try:
+                name = subprocess.run(['tasklist', '/FI', 'PID eq %d' % pid, '/FO', 'CSV', '/NH'],
+                                      capture_output=True, text=True, timeout=10).stdout
+            except Exception:
+                continue
+            if 'gflux' in name.lower():
+                subprocess.run(['taskkill', '/F', '/PID', str(pid)], capture_output=True, timeout=10)
 
 
 def free_port(start):
     for port in range(start, start + 50):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            try:
-                s.bind(('127.0.0.1', port))
-                return port
-            except OSError:
-                continue
+        if port_free(port):
+            return port
     raise SystemExit('No free port found between %d and %d.' % (start, start + 49))
 
 
@@ -178,9 +236,11 @@ def selftest(port):
     with urllib.request.urlopen(base + '/', timeout=5) as r:
         page = r.read().decode('utf-8')
     assert 'GFLUX' in page and 'js/app.js' in page, 'index.html missing'
-    for path in ('/js/app.js', '/js/parts.js', '/css/gflux.css'):
+    for path in ('/js/app.js', '/js/parts.js', '/js/editor.js', '/css/gflux.css'):
         with urllib.request.urlopen(base + path, timeout=5) as r:
             assert r.status == 200 and len(r.read()) > 1000, path
+            assert r.headers.get('Cache-Control') == 'no-cache', path
+    assert running_site(port) == kicad_bridge.site_version(site_root()), 'site version'
     health = get_json(base + '/api/kicad/health', timeout=60)
     assert health.get('bridge') is True and health.get('launcher') is True, health
     for key in ('ok', 'version', 'cli', 'source', 'problem', 'searched', 'canInstall', 'install'):
@@ -211,14 +271,19 @@ def main():
     ap.add_argument('--selftest', action='store_true')
     args = ap.parse_args()
 
-    if not args.selftest and already_running(args.port):
-        say('GFLUX is already running. Opening it in your browser.')
-        webbrowser.open('http://localhost:%d/' % args.port)
-        return
-
     root = site_root()
     if not os.path.isfile(os.path.join(root, 'index.html')):
         raise SystemExit('GFLUX site files not found in %s' % root)
+
+    running = None if args.selftest else running_site(args.port)
+    if running is not None:
+        if running == kicad_bridge.site_version(root):
+            say('GFLUX is already running. Opening it in your browser.')
+            webbrowser.open('http://localhost:%d/' % args.port)
+            return
+        say('An older GFLUX is running. Replacing it with this version...')
+        if not stop_old_gflux(args.port):
+            say('Could not close the older GFLUX. Close its window to use this version\'s address next time.')
     port = free_port(args.port)
     httpd = kicad_bridge.make_server('127.0.0.1', port, root, launcher=True)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()

@@ -28,6 +28,7 @@ Errors come back as JSON: {"ok": false, "error": "...", "stderr": "..."}.
 Works with kicad-cli 7, 8 and 9.
 """
 import argparse
+import hashlib
 import glob
 import io
 import json
@@ -1027,6 +1028,10 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Access-Control-Max-Age', '600')
         if self.path.startswith('/api/'):
             self.send_header('Cache-Control', 'no-store')
+        else:
+            # Always ask before reusing a cached page file, so a new GFLUX
+            # never runs with the old version's scripts.
+            self.send_header('Cache-Control', 'no-cache')
         super().end_headers()
 
     def log_message(self, fmt, *args):
@@ -1075,6 +1080,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         route = self.path.split('?')[0].rstrip('/')
+        if route == '/api/app':
+            return self.send_json(200, {'gflux': True, 'site': getattr(self.server, 'site_version', ''),
+                                        'launcher': getattr(self.server, 'launcher', False)})
         if route == '/api/kicad/health':
             return self.send_json(200, self.health())
         if route == '/api/kicad/install':
@@ -1091,6 +1099,13 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         route = self.path.split('?')[0].rstrip('/')
+        if route == '/api/app/quit':
+            # A newer GFLUX asks this one to make way. Never from a web page.
+            if self.headers.get('Origin') or not getattr(self.server, 'launcher', False):
+                return self.send_json(403, {'ok': False, 'error': 'not allowed'})
+            self.send_json(200, {'ok': True})
+            threading.Timer(0.3, lambda: os._exit(0)).start()
+            return
         if route in ('/api/arduino/check', '/api/arduino/setup', '/api/arduino/open'):
             # Compiling and installing run programs on this computer: GFLUX's own page only.
             if not self.same_origin():
@@ -1182,6 +1197,20 @@ class Handler(SimpleHTTPRequestHandler):
         return self.send_json(200, h)
 
 
+def site_version(root):
+    """Fingerprint of the site files, so two GFLUX apps can tell if they match."""
+    h = hashlib.sha1()
+    for folder, dirs, files in os.walk(root):
+        dirs[:] = sorted(d for d in dirs if d not in ('build', 'dist', 'tools', '.git'))
+        for name in sorted(files):
+            if name.endswith(('.html', '.js', '.css')):
+                path = os.path.join(folder, name)
+                h.update(os.path.relpath(path, root).replace(os.sep, '/').encode())
+                with open(path, 'rb') as f:
+                    h.update(f.read())
+    return h.hexdigest()[:12]
+
+
 def make_server(host='127.0.0.1', port=8765, root=None, launcher=False):
     """HTTP server for the GFLUX site (root) plus the KiCad API.
     launcher=True when running inside the GFLUX app (reported by /api/kicad/health)."""
@@ -1189,6 +1218,7 @@ def make_server(host='127.0.0.1', port=8765, root=None, launcher=False):
     httpd = ThreadingHTTPServer((host, port), partial(Handler, directory=root or ROOT))
     httpd.daemon_threads = True
     httpd.launcher = bool(launcher)
+    httpd.site_version = site_version(root or ROOT)
     return httpd
 
 
