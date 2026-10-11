@@ -55,6 +55,7 @@ GFLUX.PARTS = [
     q: 'ESP32 ESP-WROOM-32 development board 30 pin', board: PCB.black, art: 'esp32', w: 10, h: 18,
     controller: true, gpio: ESP32_GPIO, i2c: { SDA: 21, SCL: 22 },
     rails: { '3V3': '3V3', VIN: '5V', GND: 'GND' },
+    softRails: ['VIN'], vin: { VIN: [4.5, 12], '3V3': [3.0, 3.6] },
     inputOnly: ['VP', 'VN', 'D34', 'D35'],
     // Auto-wire: preferred GPIOs, ADC1 pins (ADC2 stops working with Wi-Fi), SPI bus,
     // and uart = module pin -> board pin (crossed over: module TX goes to RX2).
@@ -109,6 +110,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'pot', name: 'Knob', mpn: 'B10K', cat: 'basics', ref: 'RV',
+    volts: [0, 5.5],
     full: '10 kΩ Linear Rotary Potentiometer (B10K) with knob', q: 'B10K potentiometer with knob',
     board: PCB.blue, art: 'pot', w: 4, h: 4, pins: ['GND', 'OUT', 'VCC'],
     tip: 'Turning the knob changes the OUT voltage. Wire OUT to an analog pin (D32–D39).',
@@ -132,6 +134,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'rgbled', name: 'RGB LED', mpn: 'KY-016', cat: 'lights', ref: 'D',
+    volts: [0, 5.5],
     full: 'KY-016 RGB LED Module (common cathode, resistors on board)', q: 'KY-016 RGB LED module',
     board: PCB.black, art: 'led', ledColor: '#ffffff', w: 5, h: 4, pins: ['R', 'G', 'B', 'GND'],
     tip: 'Mix red, green and blue to make any color.',
@@ -143,6 +146,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'ledring', name: 'LED ring', mpn: 'WS2812B-16', cat: 'lights', ref: 'D', power: '5V',
+    volts: [4, 5.5],
     full: 'WS2812B 16-LED Addressable RGB Ring (NeoPixel compatible)', q: 'WS2812B 16 LED ring',
     board: PCB.black, art: 'ring', w: 5, h: 6, pins: ['5V', 'GND', 'DIN', 'DOUT'],
     tip: 'Every LED can be any color. Wire DIN to a GPIO. Needs the Adafruit NeoPixel library.',
@@ -155,6 +159,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'ledstrip', name: 'LED strip', mpn: 'WS2812B-strip', cat: 'lights', ref: 'D', power: '5V',
+    volts: [4, 5.5],
     full: 'WS2812B Addressable RGB LED Strip (60 LED/m, 5 V)', q: 'WS2812B LED strip 5V 60 LED',
     board: PCB.white, art: 'strip', w: 8, h: 3, pins: ['5V', 'DIN', 'GND'],
     tip: 'A strip of individually controllable LEDs. Use a separate 5 V supply for long strips.',
@@ -167,6 +172,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'matrix', name: 'LED grid', mpn: 'MAX7219-8x8', cat: 'lights', ref: 'U', power: '5V',
+    volts: [4, 5.5],
     full: 'MAX7219 8×8 LED Dot Matrix Module', q: 'MAX7219 8x8 LED matrix module',
     board: PCB.blue, art: 'matrix', w: 8, h: 8, pins: { left: ['VCC', 'GND', 'DIN', 'CS', 'CLK'] },
     tip: 'Draw pixels, icons or scrolling text on 64 red LEDs.',
@@ -181,6 +187,7 @@ GFLUX.PARTS = [
   // ---------------------------------------------------------------- Sensors
   {
     id: 'hcsr04', name: 'Distance sensor', mpn: 'HC-SR04', cat: 'sensors', ref: 'U', power: '5V',
+    volts: [4.5, 5.5],
     full: 'HC-SR04 Ultrasonic Distance Sensor Module (2–400 cm)', q: 'HC-SR04 ultrasonic sensor',
     board: PCB.blue, art: 'ultrasonic', w: 9, h: 5, pins: ['VCC', 'TRIG', 'ECHO', 'GND'],
     tip: 'Measures distance with sound. Runs on 5 V (VIN). ECHO outputs 5 V, so add a 1k/2k voltage divider to be safe.',
@@ -192,6 +199,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'vl53l0x', name: 'Laser distance sensor', mpn: 'VL53L0X', cat: 'sensors', ref: 'U',
+    volts: [2.6, 5.5],
     full: 'VL53L0X Time-of-Flight Laser Distance Sensor (GY-530, I2C)', q: 'VL53L0X time of flight sensor',
     board: PCB.purple, art: 'chip', w: 7, h: 4, pins: ['VIN', 'GND', 'SCL', 'SDA', 'GPIO1', 'XSHUT'],
     tip: 'Precise distance up to ~2 m with an invisible laser. Talks I2C.',
@@ -203,6 +211,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'dht22', name: 'Temp & humidity sensor', mpn: 'DHT22', cat: 'sensors', ref: 'U',
+    volts: [3.3, 6],
     full: 'DHT22 / AM2302 Temperature and Humidity Sensor Module', q: 'DHT22 temperature humidity sensor module',
     board: PCB.blue, art: 'grille', w: 4, h: 5, pins: ['VCC', 'DATA', 'GND'],
     tip: 'Reads air temperature and humidity every 2 seconds. Needs the DHT sensor library.',
@@ -213,6 +222,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'ds18b20', name: 'Waterproof temp probe', mpn: 'DS18B20', cat: 'sensors', ref: 'U',
+    volts: [3.0, 5.5],
     full: 'DS18B20 Waterproof Temperature Sensor Probe (1 m cable)', q: 'DS18B20 waterproof temperature probe',
     board: null, art: 'probe', w: 4, h: 3, pins: ['VCC', 'DATA', 'GND'],
     tip: 'Measures liquids or soil. Needs a 4.7 kΩ resistor between DATA and VCC.',
@@ -224,6 +234,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'bme280', name: 'Weather sensor', mpn: 'BME280', cat: 'sensors', ref: 'U',
+    volts: [1.8, 3.6],
     full: 'BME280 Temperature, Humidity & Pressure Sensor (I2C)', q: 'BME280 sensor module I2C',
     board: PCB.purple, art: 'chip', w: 5, h: 4, pins: ['VIN', 'GND', 'SCL', 'SDA'],
     tip: 'Temperature, humidity and air pressure in one tiny I2C sensor.',
@@ -234,7 +245,8 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'pir', name: 'Motion sensor', mpn: 'HC-SR501', cat: 'sensors', ref: 'U', power: '5V',
+    id: 'pir', name: 'Motion sensor', out3v3: true, mpn: 'HC-SR501', cat: 'sensors', ref: 'U', power: '5V',
+    volts: [4.5, 20],
     full: 'HC-SR501 PIR Infrared Motion Sensor Module', q: 'HC-SR501 PIR motion sensor',
     board: PCB.green, art: 'dome', w: 6, h: 6, pins: ['VCC', 'OUT', 'GND'],
     tip: 'OUT goes HIGH when a person moves in front of it. Power it from VIN (5 V).',
@@ -242,6 +254,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'ldr', name: 'Light sensor', mpn: 'LM393-LDR', cat: 'sensors', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'Photoresistor Light Sensor Module (LM393, digital + analog)', q: 'photoresistor light sensor module LM393',
     board: PCB.blue, art: 'ldr', w: 5, h: 4, pins: ['VCC', 'GND', 'DO', 'AO'],
     tip: 'AO gives brightness as a number. DO flips at the level set by the trim pot.',
@@ -249,6 +262,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'sound', name: 'Sound sensor', mpn: 'KY-038', cat: 'sensors', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'KY-038 Microphone Sound Sensor Module', q: 'KY-038 sound sensor module',
     board: PCB.red, art: 'mic', w: 5, h: 4, pins: ['AO', 'GND', 'VCC', 'DO'],
     tip: 'Detects claps and loud noises.',
@@ -256,6 +270,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'soil', name: 'Soil moisture sensor', mpn: 'CSMS-v1.2', cat: 'sensors', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'Capacitive Soil Moisture Sensor v1.2 (corrosion resistant)', q: 'capacitive soil moisture sensor v1.2',
     board: PCB.black, art: 'soil', w: 4, h: 9, pins: { top: ['GND', 'VCC', 'AOUT'] },
     tip: 'Stick it in a plant pot. Lower readings mean wetter soil.',
@@ -263,6 +278,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'mq2', name: 'Gas & smoke sensor', mpn: 'MQ-2', cat: 'sensors', ref: 'U', power: '5V',
+    volts: [4.8, 5.2],
     full: 'MQ-2 Gas / Smoke / LPG Sensor Module', q: 'MQ-2 gas sensor module',
     board: PCB.blue, art: 'gas', w: 5, h: 5, pins: ['VCC', 'GND', 'DO', 'AO'],
     tip: 'Senses smoke and flammable gas. Needs 5 V and warms up for ~1 minute.',
@@ -270,6 +286,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'mpu6050', name: 'Tilt & motion sensor', mpn: 'MPU-6050', cat: 'sensors', ref: 'U',
+    volts: [3.0, 5.5],
     full: 'MPU-6050 6-Axis Accelerometer + Gyroscope (GY-521)', q: 'GY-521 MPU-6050 module',
     board: PCB.blue, art: 'chip', w: 9, h: 5, pins: ['VCC', 'GND', 'SCL', 'SDA', 'XDA', 'XCL', 'AD0', 'INT'],
     tip: 'Knows which way is down and how fast it spins. Talks I2C.',
@@ -281,6 +298,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'tcrt5000', name: 'Line / edge sensor', mpn: 'TCRT5000', cat: 'sensors', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'TCRT5000 Infrared Line Tracking / Obstacle Sensor Module', q: 'TCRT5000 IR line tracking sensor module',
     board: PCB.blue, art: 'ir', w: 5, h: 5, pins: ['VCC', 'GND', 'DO', 'AO'],
     tip: 'Sees black lines or a table edge right below it.',
@@ -288,6 +306,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'hall', name: 'Magnet sensor', mpn: 'KY-003', cat: 'sensors', ref: 'U',
+    volts: [3.0, 5.5],
     full: 'KY-003 Hall Effect Magnetic Sensor Module', q: 'KY-003 hall effect sensor module',
     board: PCB.black, art: 'chip', w: 4, h: 4, pins: ['SIG', 'VCC', 'GND'],
     tip: 'SIG goes LOW when a magnet is near.',
@@ -295,6 +314,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'heartrate', name: 'Heart-rate sensor', mpn: 'MAX30102', cat: 'sensors', ref: 'U',
+    volts: [1.8, 5.5],
     full: 'MAX30102 Heart-Rate & SpO2 Pulse Oximeter Sensor Module', q: 'MAX30102 heart rate sensor module',
     board: PCB.purple, art: 'chip', w: 8, h: 4, pins: ['VIN', 'SDA', 'SCL', 'INT', 'IRD', 'RD', 'GND'],
     tip: 'Put a fingertip on it to read pulse. Talks I2C.',
@@ -306,6 +326,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'loadcell', name: 'Weight sensor', mpn: 'HX711', cat: 'sensors', ref: 'U', noAuto: ['E+', 'E-', 'A+', 'A-', 'B+', 'B-'],
+    volts: [2.6, 5.5],
     full: 'HX711 Load Cell Amplifier + 5 kg Load Cell Kit', q: 'HX711 load cell kit 5kg',
     board: PCB.green, art: 'chip', w: 7, h: 7,
     pins: { left: ['E+', 'E-', 'A-', 'A+', 'B-', 'B+'], right: ['GND', 'DT', 'SCK', 'VCC'] },
@@ -317,6 +338,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'gps', name: 'GPS module', mpn: 'NEO-6M', cat: 'sensors', ref: 'U',
+    volts: [3.0, 5.5],
     full: 'NEO-6M GPS Module with Ceramic Antenna (GY-GPS6MV2)', q: 'NEO-6M GPS module',
     board: PCB.blue, art: 'gps', w: 6, h: 6, pins: ['VCC', 'RX', 'TX', 'GND'],
     tip: 'Finds latitude and longitude from satellites. Works best outdoors.',
@@ -330,6 +352,7 @@ GFLUX.PARTS = [
   // ---------------------------------------------------------------- Input
   {
     id: 'touch', name: 'Touch sensor', mpn: 'TTP223', cat: 'input', ref: 'U',
+    volts: [2.0, 5.5],
     full: 'TTP223 Capacitive Touch Sensor Module', q: 'TTP223 touch sensor module',
     board: PCB.red, art: 'touch', w: 4, h: 4, pins: ['GND', 'VCC', 'SIG'],
     tip: 'A button you only need to touch.',
@@ -337,6 +360,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'joystick', name: 'Joystick', mpn: 'KY-023', cat: 'input', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'KY-023 Dual-Axis XY Joystick Module with button', q: 'KY-023 joystick module',
     board: PCB.black, art: 'joystick', w: 6, h: 6, pins: ['GND', '+5V', 'VRX', 'VRY', 'SW'],
     tip: 'Two analog axes plus a click. Wire VRX/VRY to analog pins.',
@@ -347,6 +371,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'encoder', name: 'Clicky knob', mpn: 'KY-040', cat: 'input', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'KY-040 Rotary Encoder Module with push button', q: 'KY-040 rotary encoder module',
     board: PCB.blue, art: 'pot', w: 6, h: 5, pins: ['CLK', 'DT', 'SW', '+', 'GND'],
     tip: 'Spins forever in clicks, like a volume knob on a car stereo.',
@@ -369,6 +394,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'irrecv', name: 'IR remote receiver', mpn: 'VS1838B', cat: 'input', ref: 'U',
+    volts: [2.7, 5.5],
     full: 'VS1838B IR Receiver Module + Remote Control Kit', q: 'VS1838B IR receiver remote kit',
     board: PCB.black, art: 'ir', w: 4, h: 4, pins: ['SIG', 'VCC', 'GND'],
     tip: 'Reads button presses from a TV-style remote.',
@@ -379,6 +405,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'rfid', name: 'RFID card reader', mpn: 'RC522', cat: 'input', ref: 'U',
+    volts: [3.0, 3.6],
     full: 'RC522 13.56 MHz RFID Reader Module with card and key fob', q: 'RC522 RFID module kit',
     board: PCB.blue, art: 'rfid', w: 9, h: 10, pins: ['SDA', 'SCK', 'MOSI', 'MISO', 'IRQ', 'GND', 'RST', '3.3V'],
     tip: 'Reads key fobs and cards. 3.3 V only!',
@@ -392,6 +419,7 @@ GFLUX.PARTS = [
   // ---------------------------------------------------------------- Screens
   {
     id: 'oled', name: 'Small screen', mpn: 'SSD1306-0.96', cat: 'screens', ref: 'U',
+    volts: [3.0, 5.5],
     full: '0.96" SSD1306 128×64 I2C OLED Display', q: '0.96 inch OLED SSD1306 I2C',
     board: PCB.blue, art: 'oled', w: 11, h: 9, pins: { top: ['GND', 'VCC', 'SCL', 'SDA'] },
     tip: 'Crisp little screen for text and drawings. Talks I2C.',
@@ -404,6 +432,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'lcd', name: 'Text screen', mpn: 'LCD1602-I2C', cat: 'screens', ref: 'U', power: '5V',
+    volts: [4.5, 5.5],
     full: '16×2 LCD1602 Display with I2C Backpack (PCF8574)', q: 'LCD1602 I2C module',
     board: PCB.green, art: 'lcd', w: 16, h: 7, pins: { left: ['GND', 'VCC', 'SDA', 'SCL'] },
     tip: 'Two lines of 16 characters. Power it from VIN (5 V).',
@@ -415,6 +444,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'tm1637', name: 'Number display', mpn: 'TM1637', cat: 'screens', ref: 'U',
+    volts: [3.3, 5.5],
     full: 'TM1637 4-Digit 7-Segment LED Display Module', q: 'TM1637 4 digit display module',
     board: PCB.blue, art: 'seg', w: 11, h: 5, pins: { right: ['CLK', 'DIO', 'VCC', 'GND'] },
     tip: 'Shows 4 big digits, great for clocks and counters.',
@@ -427,6 +457,7 @@ GFLUX.PARTS = [
   // ---------------------------------------------------------------- Motors
   {
     id: 'servo', name: 'Servo motor', mpn: 'SG90', cat: 'motors', ref: 'M', power: '5V',
+    volts: [4.8, 6.0],
     full: 'SG90 9 g Micro Servo Motor (180°)', q: 'SG90 micro servo',
     board: null, art: 'servo', w: 6, h: 5, pins: ['GND', 'VCC', 'SIG'],
     tip: 'Turns to an exact angle. Brown = GND, red = 5 V, orange = signal.',
@@ -437,6 +468,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'dcmotor', name: 'DC motor', mpn: 'TT-motor', cat: 'motors', ref: 'M', passive: true,
+    volts: [3.0, 6.0],
     full: 'TT Gear Motor 3–6 V (robot car motor)', q: 'TT gear motor 3-6V',
     board: null, art: 'motor', w: 6, h: 4, pins: ['M+', 'M-'],
     tip: 'Never wire a motor straight to the ESP32. Drive it through a motor driver.',
@@ -455,6 +487,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'stepper', name: 'Stepper motor', mpn: '28BYJ-48+ULN2003', cat: 'motors', ref: 'M', power: '5V',
+    volts: [5.0, 12.0],
     full: '28BYJ-48 5 V Stepper Motor with ULN2003 Driver Board', q: '28BYJ-48 stepper motor ULN2003',
     board: PCB.green, art: 'chip', w: 8, h: 6, pins: ['IN1', 'IN2', 'IN3', 'IN4', '+', '-'],
     tip: 'Moves in tiny precise steps. 2048 steps = one full turn.',
@@ -465,6 +498,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'relay', name: 'Relay', mpn: 'SRD-05VDC', cat: 'motors', ref: 'K', power: '5V', noAuto: ['NO', 'COM', 'NC'],
+    volts: [4.5, 5.5],
     full: '5 V 1-Channel Relay Module with Optocoupler', q: '5V 1 channel relay module',
     board: PCB.blue, art: 'relay', w: 9, h: 5, pins: { left: ['NO', 'COM', 'NC'], right: ['VCC', 'GND', 'IN'] },
     tip: 'A switch the ESP32 can flip to turn bigger things on and off. Mains voltage is NOT a beginner project.',
@@ -472,6 +506,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'vibe', name: 'Vibration motor', mpn: 'VIB-1027', cat: 'motors', ref: 'M',
+    volts: [3.0, 5.5],
     full: 'Vibration Motor Module (coin motor, with driver)', q: 'vibration motor module arduino',
     board: PCB.black, art: 'coin', w: 4, h: 4, pins: ['IN', 'VCC', 'GND'],
     tip: 'Buzzes like a phone in your pocket.',
@@ -481,6 +516,7 @@ GFLUX.PARTS = [
   // ---------------------------------------------------------------- Sound & storage
   {
     id: 'buzzer', name: 'Buzzer', mpn: 'KY-012', cat: 'sound', ref: 'BZ',
+    volts: [3.3, 5.5],
     full: 'KY-012 Active Buzzer Module', q: 'active buzzer module',
     board: PCB.black, art: 'buzzer', w: 4, h: 4, pins: ['SIG', 'VCC', 'GND'],
     tip: 'Beeps when SIG is HIGH.',
@@ -494,12 +530,14 @@ GFLUX.PARTS = [
   },
   {
     id: 'i2samp', name: 'Speaker amp', mpn: 'MAX98357A', cat: 'sound', ref: 'U',
+    volts: [2.5, 5.5],
     full: 'MAX98357A I2S 3 W Class-D Amplifier Breakout', q: 'MAX98357A I2S amplifier',
     board: PCB.purple, art: 'chip', w: 8, h: 4, pins: ['LRC', 'BCLK', 'DIN', 'GAIN', 'SD', 'GND', 'VIN'],
     tip: 'Plays digital audio from the ESP32 on a small speaker.',
   },
   {
     id: 'dfplayer', name: 'MP3 player', mpn: 'DFPlayer-Mini', cat: 'sound', ref: 'U', power: '5V', noAuto: ['USB-', 'USB+', 'SPK_1', 'SPK_2'],
+    volts: [3.2, 5.0],
     full: 'DFPlayer Mini MP3 Player Module (microSD)', q: 'DFPlayer Mini MP3 module',
     board: PCB.blue, art: 'sd', w: 8, h: 9,
     pins: {
@@ -514,6 +552,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'sdcard', name: 'SD card module', mpn: 'MicroSD-SPI', cat: 'sound', ref: 'U', power: '5V',
+    volts: [4.5, 5.5],
     full: 'MicroSD Card SPI Reader Module', q: 'micro SD card module SPI',
     board: PCB.blue, art: 'sd', w: 7, h: 9, pins: ['GND', 'VCC', 'MISO', 'MOSI', 'SCK', 'CS'],
     tip: 'Save data logs or read files.',
@@ -524,6 +563,7 @@ GFLUX.PARTS = [
   },
   {
     id: 'rtc', name: 'Clock module', mpn: 'DS3231', cat: 'sound', ref: 'U',
+    volts: [2.3, 5.5],
     full: 'DS3231 Real-Time Clock Module (with coin cell holder)', q: 'DS3231 RTC module',
     board: PCB.blue, art: 'coin', w: 10, h: 6, pins: { right: ['32K', 'SQW', 'SCL', 'SDA', 'VCC', 'GND'] },
     tip: 'Keeps the time even when unplugged.',
@@ -539,22 +579,32 @@ GFLUX.PARTS = [
     id: 'battery', name: 'Battery pack', mpn: '4xAA', cat: 'power', ref: 'BT', passive: true,
     full: '4×AA Battery Holder with On/Off Switch (6 V)', q: '4 AA battery holder with switch',
     board: null, art: 'battery', w: 8, h: 5, pins: ['+', '-'],
-    rails: { '+': 'VBAT', '-': 'GND' },
-    tip: 'Portable power. Wire + to VIN and - to GND.',
+    rails: { '+': 'VBAT', '-': 'GND' }, railVolts: { '+': 6 },
+    tip: 'Portable power (6 V). Wire + to the ESP32 VIN and - to GND.',
   },
   {
     id: 'tp4056', name: 'Battery charger', mpn: 'TP4056', cat: 'power', ref: 'U',
+    volts: [4.5, 5.5],
     full: 'TP4056 USB-C Li-ion Battery Charger Module (with protection)', q: 'TP4056 USB-C charger module',
     board: PCB.blue, art: 'chip', w: 7, h: 5, pins: { left: ['IN+', 'IN-'], right: ['B+', 'B-', 'OUT+', 'OUT-'] },
-    rails: { 'OUT+': 'VBAT', 'OUT-': 'GND', 'IN-': 'GND' },
+    rails: { 'OUT+': 'VBAT', 'OUT-': 'GND', 'IN-': 'GND' }, railVolts: { 'OUT+': 3.7 },
     tip: 'Charges a single 3.7 V lithium cell from USB.',
   },
   {
-    id: 'buck', name: 'Power regulator', mpn: 'LM2596', cat: 'power', ref: 'U',
-    full: 'LM2596 Adjustable DC-DC Buck Converter Module', q: 'LM2596 buck converter module',
+    id: 'buck', name: 'Buck converter', mpn: 'LM2596', cat: 'power', ref: 'U',
+    full: 'LM2596 Adjustable DC-DC Buck (Step-Down) Converter Module', q: 'LM2596 buck converter module',
     board: PCB.blue, art: 'buck', w: 10, h: 5, pins: { left: ['IN+', 'IN-'], right: ['OUT+', 'OUT-'] },
     rails: { 'OUT+': 'VREG', 'OUT-': 'GND', 'IN-': 'GND' },
-    tip: 'Turns 7–35 V down to the voltage you set with the screw.',
+    converter: 'buck', vout: 5, voutRange: [1.25, 35], volts: [4.5, 40],
+    tip: 'Steps a higher voltage DOWN (e.g. 12 V to 5 V). Set the output voltage: select it and type the volts.',
+  },
+  {
+    id: 'boost', name: 'Boost converter', mpn: 'MT3608', cat: 'power', ref: 'U',
+    full: 'MT3608 Adjustable DC-DC Boost (Step-Up) Converter Module', q: 'MT3608 boost converter module',
+    board: PCB.blue, art: 'buck', w: 9, h: 4, pins: { left: ['IN+', 'IN-'], right: ['OUT+', 'OUT-'] },
+    rails: { 'OUT+': 'VREG', 'OUT-': 'GND', 'IN-': 'GND' },
+    converter: 'boost', vout: 12, voutRange: [5, 28], volts: [2, 24],
+    tip: 'Steps a lower voltage UP (e.g. a 3.7 V battery to 5 V or 12 V). Select it and type the output volts.',
   },
 ];
 
@@ -628,3 +678,15 @@ GFLUX.setCustomParts = function (list) {
 };
 
 GFLUX.PCB_COLORS = PCB;
+
+const RAIL_VOLTS = { '3V3': 3.3, '5V': 5 };
+/** Voltage a supply pin puts out (buck/boost outputs follow their setting). */
+GFLUX.railVoltage = function (inst, pinName) {
+  const def = GFLUX.getPart(inst.type);
+  const rail = def.rails && def.rails[pinName];
+  if (!rail || rail === 'GND') return rail === 'GND' ? 0 : null;
+  if (def.converter && pinName === 'OUT+') return inst.vout != null ? +inst.vout : def.vout;
+  if (def.railVolts && def.railVolts[pinName] != null) return def.railVolts[pinName];
+  return RAIL_VOLTS[rail] != null ? RAIL_VOLTS[rail] : null;
+};
+GFLUX.formatVolts = (v) => (Math.round(v * 10) / 10) + 'V';

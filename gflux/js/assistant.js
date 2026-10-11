@@ -89,6 +89,7 @@
           '<div class="gx-code"><div class="gx-code-bar"><span class="gx-code-lang">' + esc(lang || 'code') + '</span>' +
           '<button type="button" class="gx-code-btn" data-act="copy">Copy</button>' +
           (isIno ? '<button type="button" class="gx-code-btn" data-act="download">Download .ino</button>' : '') +
+          (isIno ? '<button type="button" class="gx-code-btn gx-code-check" data-act="check">Check</button>' : '') +
           '</div><pre><code>' + esc(code.join('\n')) + '</code></pre></div>');
         continue;
       }
@@ -201,16 +202,22 @@
     // -- composer
     const input = el('textarea', { class: 'gx-as-input', rows: '2', placeholder: 'e.g. Beep when something is closer than 10 cm', 'aria-label': 'Message' });
     const starterBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-ghost', text: 'Starter code' });
+    const checkBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-ghost gx-btn-check', text: 'Check my code' });
     const sendBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-send', text: 'Send' });
     const stopBtn = el('button', { type: 'button', class: 'gx-btn gx-btn-stop', text: 'Stop', hidden: true });
     const composer = el('div', { class: 'gx-as-compose' }, [
       input,
-      el('div', { class: 'gx-as-actions' }, [starterBtn, el('span', { class: 'gx-spacer' }), stopBtn, sendBtn]),
+      el('div', { class: 'gx-as-actions' }, [starterBtn, checkBtn, el('span', { class: 'gx-spacer' }), stopBtn, sendBtn]),
     ]);
 
+    // Four ready-made example projects: circuit + sketch.
+    const examples = el('div', { class: 'gx-as-examples', role: 'list', 'aria-label': 'Examples' });
+    ((G.codecheck && G.codecheck.EXAMPLES) || []).forEach((ex, i) => examples.append(
+      el('button', { type: 'button', class: 'gx-example gx-w' + ((i * 2) % 9), role: 'listitem', text: ex.title, onclick: () => loadExample(i) })));
+
     root.append(
-      el('div', { class: 'gx-as-head' }, [el('span', { class: 'gx-as-title', text: 'Assistant' }), el('span', { class: 'gx-as-sub', text: 'ESP32 code helper' })]),
-      settings, list, chips, composer,
+      el('div', { class: 'gx-as-head' }, [el('span', { class: 'gx-as-title', text: 'Code' }), el('span', { class: 'gx-as-sub', text: 'write, check & learn' })]),
+      examples, settings, list, chips, composer,
     );
     updateStatus();
 
@@ -419,6 +426,22 @@
     sendBtn.addEventListener('click', () => send());
     stopBtn.addEventListener('click', stop);
     starterBtn.addEventListener('click', showStarter);
+
+    /** Check the newest sketch in the chat (or the starter code). */
+    checkBtn.addEventListener('click', () => {
+      const blocks = list.querySelectorAll('.gx-code code');
+      const code = blocks.length ? blocks[blocks.length - 1].textContent : starterSketch();
+      if (!blocks.length) addMessage('assistant', starterMarkdown('Here is your starter code. Checking it now…'));
+      if (G.codecheck) G.codecheck.run(code);
+    });
+
+    function loadExample(i) {
+      if (!G.codecheck || !G.app || !G.app.loadProject) return;
+      const ex = G.codecheck.buildExample(i);
+      G.app.loadProject(ex.state);
+      addMessage('assistant', `**Example: ${ex.title}.** The circuit is on the canvas and wired up. Here's the sketch:\n\n\`\`\`cpp\n${ex.code}\`\`\``);
+      G.codecheck.run(ex.code);
+    }
     root.addEventListener('pointerenter', renderChips);
     input.addEventListener('focus', renderChips);
 
@@ -426,7 +449,9 @@
       const btn = e.target.closest('[data-act]');
       if (!btn || !list.contains(btn)) return;
       const code = btn.closest('.gx-code').querySelector('code').textContent;
-      if (btn.dataset.act === 'copy') {
+      if (btn.dataset.act === 'check') {
+        if (G.codecheck) G.codecheck.run(code);
+      } else if (btn.dataset.act === 'copy') {
         let ok = false;
         try { await navigator.clipboard.writeText(code); ok = true; } catch (err) {
           const ta = el('textarea', { class: 'gx-offscreen' }); ta.value = code; document.body.append(ta); ta.select();

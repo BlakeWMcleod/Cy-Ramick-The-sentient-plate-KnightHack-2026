@@ -233,15 +233,15 @@
 .gx-assistant .gx-chip:hover { transform: translateY(-1px); box-shadow: 0 3px 0 var(--as-line); }
 .gx-assistant .gx-chip:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--as-line); }
 .gx-assistant .gx-chip:focus-visible { outline: 2px solid var(--as-accent); outline-offset: 2px; }
-.gx-assistant .gx-chip.gx-w0 { --chip: var(--wR, #e53935); }
-.gx-assistant .gx-chip.gx-w1 { --chip: var(--wO, #fb8c00); }
-.gx-assistant .gx-chip.gx-w2 { --chip: var(--wY, #fdd835); }
-.gx-assistant .gx-chip.gx-w3 { --chip: var(--wG, #43a047); }
-.gx-assistant .gx-chip.gx-w4 { --chip: var(--wB, #1e88e5); }
-.gx-assistant .gx-chip.gx-w5 { --chip: var(--wI, #3f51b5); }
-.gx-assistant .gx-chip.gx-w6 { --chip: var(--wV, #8e24aa); }
-.gx-assistant .gx-chip.gx-w7 { --chip: var(--wW, #f4f4f4); }
-.gx-assistant .gx-chip.gx-w8 { --chip: var(--wK, #1c1c1c); }
+.gx-assistant .gx-chip.gx-w0, .gx-assistant .gx-example.gx-w0 { --chip: var(--wR, #e53935); }
+.gx-assistant .gx-chip.gx-w1, .gx-assistant .gx-example.gx-w1 { --chip: var(--wO, #fb8c00); }
+.gx-assistant .gx-chip.gx-w2, .gx-assistant .gx-example.gx-w2 { --chip: var(--wY, #fdd835); }
+.gx-assistant .gx-chip.gx-w3, .gx-assistant .gx-example.gx-w3 { --chip: var(--wG, #43a047); }
+.gx-assistant .gx-chip.gx-w4, .gx-assistant .gx-example.gx-w4 { --chip: var(--wB, #1e88e5); }
+.gx-assistant .gx-chip.gx-w5, .gx-assistant .gx-example.gx-w5 { --chip: var(--wI, #3f51b5); }
+.gx-assistant .gx-chip.gx-w6, .gx-assistant .gx-example.gx-w6 { --chip: var(--wV, #8e24aa); }
+.gx-assistant .gx-chip.gx-w7, .gx-assistant .gx-example.gx-w7 { --chip: var(--wW, #f4f4f4); }
+.gx-assistant .gx-chip.gx-w8, .gx-assistant .gx-example.gx-w8 { --chip: var(--wK, #1c1c1c); }
 
 /* ---------------------------------------------------------------- composer */
 .gx-assistant .gx-as-compose {
@@ -306,3 +306,11 @@
 @media (prefers-reduced-motion: reduce) {
   .gx-assistant * { animation: none !important; transition: none !important; }
 }
+
+.gx-assistant .gx-as-examples { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 14px 10px; }
+.gx-assistant .gx-example {
+  padding: 9px 10px; border: 1px solid var(--line); border-left: 5px solid var(--chip, var(--wG)); background: #fff;
+  font: 600 13px var(--font-ui); text-align: left; cursor: pointer; border-radius: 0;
+}
+.gx-assistant .gx-example:hover { background: var(--surface-2); }
+.gx-assistant .gx-code-check { font-weight: 700; }

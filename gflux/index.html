@@ -37,6 +37,10 @@
           <button role="menuitem" data-act="open"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg>Open…</button>
           <button role="menuitem" data-act="save"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/></svg>Save<kbd>Ctrl S</kbd></button>
           <hr>
+          <button role="menuitem" data-act="copy"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12"/><path d="M16 8V4H4v12h4"/></svg>Copy<kbd>Ctrl C</kbd></button>
+          <button role="menuitem" data-act="paste"><svg viewBox="0 0 24 24"><path d="M9 4h6v3H9zM7 5H5v15h14V5h-2"/></svg>Paste<kbd>Ctrl V</kbd></button>
+          <button role="menuitem" data-act="duplicate"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="11" height="11"/><rect x="9" y="9" width="11" height="11"/></svg>Duplicate<kbd>Ctrl D</kbd></button>
+          <hr>
           <button role="menuitem" data-act="undo" id="btnUndo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>Undo<kbd>Ctrl Z</kbd></button>
           <button role="menuitem" data-act="redo" id="btnRedo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg>Redo<kbd>Ctrl ⇧ Z</kbd></button>
         </div>
@@ -99,9 +103,22 @@
     </nav>
 
     <button class="finalize-btn" id="btnFinalize" data-act="finalize"><svg viewBox="0 0 24 24"><path d="m4 12 5 5L20 6"/></svg>Finalize</button>
-    <button class="kicad-chip" id="kicadChip" data-state="none"><i></i><span>KiCad</span></button>
   </header>
+  <div id="edgeGlow" aria-hidden="true"></div>
   <div id="finalize" class="finalize" hidden role="dialog" aria-modal="true" aria-label="Finalize"></div>
+  <div id="splash" class="finalize splash" hidden role="dialog" aria-modal="true" aria-label="Welcome to GFLUX">
+    <div class="fin-card">
+      <img class="splash-logo" src="img/banner.png" alt="GFLUX">
+      <p class="splash-tag">Build circuits. Watch the current flow. Make it real.</p>
+      <p class="splash-thanks">Made possible with thanks to</p>
+      <ul class="splash-credits">
+        <li><b>KiCad</b><span>schematics &amp; PCBs</span></li>
+        <li><b>Iconer</b><span>icons</span></li>
+        <li><b>Pixlr</b><span>image editing</span></li>
+      </ul>
+      <div class="fin-actions"><button class="btn primary fin-go" data-splash>Proceed</button></div>
+    </div>
+  </div>
 
   <main id="stage">
     <canvas id="gridCanvas" aria-hidden="true"></canvas>
@@ -110,6 +127,7 @@
       </defs>
       <g id="world1">
         <g id="L-parts"></g>
+        <g id="L-sim"></g>
         <g id="L-wires"></g>
         <g id="L-flow"></g>
         <g id="L-labels"></g>
@@ -136,7 +154,7 @@
 
     <nav id="rail" aria-label="Side panels">
       <button data-tab="library" aria-pressed="false"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7"/><rect x="13" y="4" width="8" height="7"/><rect x="3" y="13" width="8" height="7"/><rect x="13" y="13" width="8" height="7"/></svg><span>Library</span></button>
-      <button data-tab="assistant" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg><span>Code AI</span></button>
+      <button data-tab="assistant" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg><span>Code</span></button>
     </nav>
 
     <aside id="drawer" data-tab="library" aria-label="Side panel">
@@ -170,6 +188,12 @@
     <div id="legend" class="legend" hidden>
       <span class="lg good">Good match</span><span class="lg ok">Works</span><span class="lg caution">Careful</span><span class="lg blocked">Would break something</span><span class="lg-esc"><kbd>Esc</kbd> cancel</span>
     </div>
+    <div id="liveIssues" class="live-issues" hidden role="status" aria-live="polite"></div>
+    <div id="codeIssues" class="code-issues" hidden role="status" aria-live="polite"></div>
+    <div id="partSettings" class="part-settings" hidden>
+      <label>Output <input type="number" step="0.1" inputmode="decimal" aria-label="Output voltage"> V</label>
+      <span class="ps-range"></span>
+    </div>
     <div id="tip" class="tip" hidden></div>
     <div id="pinTip" class="pin-tip" hidden></div>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -185,6 +209,7 @@
   <script src="js/codegen.js"></script>
   <script src="js/autowire.js"></script>
   <script src="js/check.js"></script>
+  <script src="js/codecheck.js"></script>
   <script src="js/assistant.js"></script>
   <script src="js/app.js"></script>
 </body>

@@ -1078,12 +1078,35 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(200, self.health())
         if route == '/api/kicad/install':
             return self.send_json(200, install_status())
+        if route == '/api/arduino/health':
+            import arduino_bridge
+            return self.send_json(200, arduino_bridge.health())
+        if route == '/api/arduino/setup':
+            import arduino_bridge
+            return self.send_json(200, arduino_bridge.setup_status())
         if self.path.startswith('/api/'):
             return self.send_json(404, {'ok': False, 'error': 'unknown endpoint'})
         return super().do_GET()
 
     def do_POST(self):
         route = self.path.split('?')[0].rstrip('/')
+        if route in ('/api/arduino/check', '/api/arduino/setup'):
+            # Compiling and installing run programs on this computer: GFLUX's own page only.
+            if not self.same_origin():
+                return self.send_json(403, {'ok': False, 'error': 'this request must come from the GFLUX page itself'})
+            import arduino_bridge
+            try:
+                data = self.read_json(optional=True)
+                if route == '/api/arduino/setup':
+                    return self.send_json(200, arduino_bridge.start_setup(data.get('libs')))
+                code = data.get('code')
+                if not isinstance(code, str) or not code.strip():
+                    raise ValueError('missing code')
+                return self.send_json(200, arduino_bridge.compile_sketch(code, data.get('fqbn') or 'esp32:esp32:esp32'))
+            except (ValueError, UnicodeDecodeError) as e:
+                return self.send_json(400, {'ok': False, 'error': str(e)})
+            except (OSError, subprocess.SubprocessError) as e:
+                return self.send_json(500, {'ok': False, 'error': 'could not run arduino-cli: %s' % e})
         if route in ('/api/kicad/install', '/api/kicad/recheck', '/api/kicad/locate', '/api/kicad/open'):
             # Only GFLUX's own page may install, re-scan or open a picker, never another website.
             if not self.same_origin():

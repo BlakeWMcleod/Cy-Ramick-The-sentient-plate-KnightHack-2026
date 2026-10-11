@@ -26,6 +26,7 @@ Opening `gflux/index.html` Does **NOT** Work as intended, sorry hackers
 | Wire by hand | Drag from one pin to another. Let go on empty grid to leave the end loose, or click a pin and then click the grid to add bends |
 | Rotate / delete | Select, then press <kbd>R</kbd> / <kbd>Del</kbd>, or use the tools on the left |
 | Undo / redo | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
+| Copy / paste | <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates) |
 | Save / open | **File** menu. Work also autosaves in your browser |
 | Finilise | Checks your work to find any Errors |
 
@@ -47,7 +48,6 @@ The **KiCad** menu offers:
 - **Download KiCad project:** a `.zip` with the project, schematic, board and generated `.ino` sketch
 - **Check again / Locate / Install:** ask the app to find KiCad, point it at your install, or install KiCad for you
 
-**PLEASE NOTE THIS USES CODE FROM KICAD; I DID NOT DO THIS PLEASE GIVE THANKS TO THE KICAD DEV TEAM**
 
 ## Parts library
  50 modules you can buy on Amazon, each with a plain name and its real pinout:
@@ -74,6 +74,4 @@ pip install pyinstaller pillow
 python gflux/tools/build_app.py          # build the app (GFLUX.exe on Windows)
 python3 -m unittest discover gflux/tools/tests -v
 ```
-|
-| `gflux/tools/` | Desktop app, KiCad bridge, build script and tests |
-(firmware/README.md).
+

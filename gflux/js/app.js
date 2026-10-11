@@ -79,7 +79,27 @@
 
   function changed(save = true) {
     if (save) store.set('gflux.autosave', JSON.stringify(state));
+    updateLiveIssues();
     render();
+    if (GFLUX.codecheck) GFLUX.codecheck.circuitChanged();
+  }
+
+  // Wiring mistakes pop up as soon as they happen (things not wired yet wait for Finalize).
+  let liveSig = '', liveDismissed = '', faultUids = new Set();
+  function updateLiveIssues() {
+    const box = document.getElementById('liveIssues');
+    if (!box || !GFLUX.check) return;
+    const faults = GFLUX.check.run(state).filter((i) => i.kind === 'fault');
+    faultUids = new Set(faults.filter((i) => i.level === 'error' && i.uid).map((i) => i.uid));
+    const sig = faults.map((i) => i.text).join('|');
+    if (!faults.length || sig === liveDismissed) { box.hidden = true; liveSig = sig; return; }
+    if (sig !== liveSig || box.hidden) {
+      box.className = 'live-issues' + (faults.every((i) => i.level === 'warn') ? ' warn-only' : '');
+      box.innerHTML = `<button class="x" aria-label="Dismiss">×</button><h4>${faults.length === 1 ? '1 problem' : faults.length + ' problems'}</h4>` +
+        `<ul>${faults.map((i) => `<li class="${i.level}"${i.uid ? ` data-uid="${i.uid}"` : ''}>${esc(i.text)}</li>`).join('')}</ul>`;
+      box.hidden = false;
+    }
+    liveSig = sig;
   }
 
   // ------------------------------------------------------- wire ends & refs
@@ -144,13 +164,19 @@
 
   const TAG_BTN = 24; // auto-wire button width (px) beside a name tag
 
+  /** Name tag text: buck/boost converters also show the voltage they're set to. */
+  function tagText(inst) {
+    const def = GFLUX.getPart(inst.type);
+    return def.converter ? `${def.name} · ${GFLUX.formatVolts(inst.vout != null ? +inst.vout : def.vout)}` : def.name;
+  }
+
   /** Where a part's name tag sits (grid units): above the board, or below it
    *  when the part has header pins along its top edge. */
   function labelSpot(inst) {
     const def = GFLUX.getPart(inst.type), box = GFLUX.partBox(inst);
     const pins = GFLUX.partPins(inst);
     const below = pins.some((p) => p.side === 'top') && !pins.some((p) => p.side === 'bottom');
-    const w = def.name.length * 7.4 + 22 + (def.controller ? 0 : TAG_BTN);
+    const w = tagText(inst).length * 7.4 + 22 + (def.controller ? 0 : TAG_BTN);
     return { cx: box.x + box.w / 2, cy: below ? box.y + box.h + 1.1 : box.y - 1.1, half: w / 2 / G, w };
   }
 
@@ -268,7 +294,7 @@
   let routeSig = '', routes = new Map(), routeUsed = new Set();
   function allRoutes() {
     refreshObstacles();
-    const sig = obstacleSig + '#' + JSON.stringify(state.wires);
+    const sig = obstacleSig + '#' + JSON.stringify(state.wires) + '#' + state.parts.map((p) => p.vout || '').join(',');
     if (sig === routeSig) return routes;
     routes = new Map();
     routeUsed = new Set();
@@ -339,14 +365,14 @@
 
   /** Glowing white pulses (radial gradient) travelling the way current flows. */
   function pulseMarkup(d, len, kind) {
-    const spacing = Math.max(24, anim.gap * 4), rad = anim.size * 2.8;
+    const spacing = Math.max(40, anim.gap * 6), rad = anim.size * 7;
     const dur = Math.max(0.4, len / (FLOW_SPEED[kind] * anim.speed));
     const n = Math.min(14, Math.max(1, Math.round(len / spacing)));
     let s = '';
     for (let i = 0; i < n; i++) {
       const begin = (-dur * i / n).toFixed(3);
       s += `<circle class="pulse" r="${rad}" fill="url(#gx-pulse)">` +
-        `<animate attributeName="r" values="${rad * 0.75};${rad * 1.2};${rad * 0.75}" dur="1.1s" begin="${begin}s" repeatCount="indefinite"/>` +
+        `<animate attributeName="r" values="${rad * 0.85};${rad * 1.1};${rad * 0.85}" dur="1.6s" begin="${begin}s" repeatCount="indefinite"/>` +
         `<animateMotion dur="${dur.toFixed(3)}s" begin="${begin}s" repeatCount="indefinite" path="${d}"/></circle>`;
     }
     return s;
@@ -404,6 +430,7 @@
       parts += `<g class="part${selected ? ' selected' : ''}" data-uid="${inst.uid}" transform="${partTransform(inst)}">${artCache.get(inst.type)}</g>`;
       const box = GFLUX.partBox(inst);
       if (selected) labels += `<rect class="sel-box" x="${(box.x - 0.9) * G}" y="${(box.y - 0.9) * G}" width="${(box.w + 1.8) * G}" height="${(box.h + 1.8) * G}"/>`;
+      if (faultUids.has(inst.uid)) labels += `<rect class="fault-ring" x="${(box.x - 1.3) * G}" y="${(box.y - 1.3) * G}" width="${(box.w + 2.6) * G}" height="${(box.h + 2.6) * G}" rx="8"/>`;
       labels += labelMarkup(inst, def);
       for (const p of GFLUX.partPins(inst)) {
         const ref = { uid: inst.uid, pin: p.num };
@@ -428,7 +455,11 @@
       const f = flows.get(w.id);
       if (f && f.dir && anim[f.kind]) {
         const fp = f.dir > 0 ? pts : pts.slice().reverse();
-        flow += flowMarkup(pathD(fp), f.kind, fp);
+        // The glow only shows inside this wire: masked by the wire's own stroke.
+        const m = 'fm-' + w.id;
+        flow += `<mask id="${m}" maskUnits="userSpaceOnUse" x="-100000" y="-100000" width="200000" height="200000">` +
+          `<path d="${d}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></mask>` +
+          `<g mask="url(#${m})">${flowMarkup(pathD(fp), f.kind, fp)}</g>`;
       }
     }
     for (const pt of looseEnds.values()) {
@@ -447,6 +478,7 @@
     $('#legend').hidden = !wiring;
     $('#hint').hidden = !!wiring;
     $('#stats').textContent = `${state.parts.length} parts · ${state.wires.length} wires · ${Math.round(view.k * 100)}%`;
+    placePartSettings();
     $$('[data-act="undo"]').forEach((b) => { b.disabled = !undoStack.length; });
     $$('[data-act="redo"]').forEach((b) => { b.disabled = !redoStack.length; });
   }
@@ -457,7 +489,7 @@
     let s = `<g class="part-label cat-${def.cat}" data-uid="${inst.uid}" data-type="${esc(inst.type)}" transform="translate(${tag.cx * G} ${tag.cy * G})">` +
       `<rect class="tag" x="${-w / 2}" y="-10" width="${w}" height="20" rx="10"/>` +
       `<rect class="name-hit" x="${-w / 2}" y="-10" width="${nameW}" height="20"/>` +
-      `<text x="${-w / 2 + nameW / 2}" y="4.5" text-anchor="middle">${esc(def.name)}</text>`;
+      `<text x="${-w / 2 + nameW / 2}" y="4.5" text-anchor="middle">${esc(tagText(inst))}</text>`;
     if (!def.controller) {
       const info = autowireInfo(inst.uid);
       if (info) {
@@ -489,7 +521,7 @@
   // Drawn on a canvas under the SVG; lines bulge away from the mouse.
   const gridCv = $('#gridCanvas'), gctx = gridCv.getContext('2d');
   const warp = { mx: -1e4, my: -1e4, tx: -1e4, ty: -1e4, s: 0, ts: 0 };
-  let gridRaf = 0;
+  let gridRaf = 0, gridRainbow = 0; // start time of the finalize rainbow sweep (0 = off)
   const requestGrid = () => { if (!gridRaf) gridRaf = requestAnimationFrame(drawGrid); };
 
   function luminance(hex) {
@@ -521,19 +553,32 @@
       const f = K * Math.exp(-(dx * dx + dy * dy) / (R * R));
       return [x + dx * f, y + dy * f];
     };
-    gctx.lineWidth = 1;
-    gctx.strokeStyle = luminance(bgColor) > 0.4 ? 'rgba(25, 30, 50, 0.11)' : 'rgba(255, 255, 255, 0.11)';
+    gctx.lineWidth = gridRainbow ? 1.6 : 1;
+    const plain = luminance(bgColor) > 0.4 ? 'rgba(25, 30, 50, 0.11)' : 'rgba(255, 255, 255, 0.11)';
+    // During the finalize intro the grid sweeps once around the rainbow.
+    const phase = gridRainbow ? (performance.now() - gridRainbow) / 900 : 0;
+    const colorAt = (pos) => (gridRainbow ? `hsla(${(phase * 360 + pos * 0.35) % 360}, 90%, 55%, 0.55)` : plain);
+    const line = (pos, pts) => {
+      if (gridRainbow) { gctx.beginPath(); gctx.strokeStyle = colorAt(pos); }
+      pts();
+      if (gridRainbow) gctx.stroke();
+    };
+    gctx.strokeStyle = plain;
     gctx.beginPath();
     for (let x = ox; x <= w; x += sp) {
-      if (!bend || Math.abs(x - warp.mx) > R * 2.6) { gctx.moveTo(x + 0.5, 0); gctx.lineTo(x + 0.5, h); continue; }
-      for (let y = 0; y <= h + 8; y += 8) { const [px, py] = disp(x, y); y ? gctx.lineTo(px + 0.5, py) : gctx.moveTo(px + 0.5, py); }
+      line(x, () => {
+        if (!bend || Math.abs(x - warp.mx) > R * 2.6) { gctx.moveTo(x + 0.5, 0); gctx.lineTo(x + 0.5, h); return; }
+        for (let y = 0; y <= h + 8; y += 8) { const [px, py] = disp(x, y); y ? gctx.lineTo(px + 0.5, py) : gctx.moveTo(px + 0.5, py); }
+      });
     }
     for (let y = oy; y <= h; y += sp) {
-      if (!bend || Math.abs(y - warp.my) > R * 2.6) { gctx.moveTo(0, y + 0.5); gctx.lineTo(w, y + 0.5); continue; }
-      for (let x = 0; x <= w + 8; x += 8) { const [px, py] = disp(x, y); x ? gctx.lineTo(px, py + 0.5) : gctx.moveTo(px, py + 0.5); }
+      line(y, () => {
+        if (!bend || Math.abs(y - warp.my) > R * 2.6) { gctx.moveTo(0, y + 0.5); gctx.lineTo(w, y + 0.5); return; }
+        for (let x = 0; x <= w + 8; x += 8) { const [px, py] = disp(x, y); x ? gctx.lineTo(px, py + 0.5) : gctx.moveTo(px, py + 0.5); }
+      });
     }
-    gctx.stroke();
-    if (Math.abs(warp.tx - warp.mx) > 0.3 || Math.abs(warp.ty - warp.my) > 0.3 || Math.abs(warp.ts - warp.s) > 0.005) requestGrid();
+    if (!gridRainbow) gctx.stroke();
+    if (gridRainbow || Math.abs(warp.tx - warp.mx) > 0.3 || Math.abs(warp.ty - warp.my) > 0.3 || Math.abs(warp.ts - warp.s) > 0.005) requestGrid();
   }
 
   // ------------------------------------------------ top bar follows the hover
@@ -621,6 +666,7 @@
   function addPart(type, at) {
     const def = GFLUX.getPart(type);
     if (!def) return;
+    if (simRunning) { toast('Stop the running code to add parts.', 'warn'); return; }
     snapshot();
     let pos = at;
     if (!pos) {
@@ -695,7 +741,10 @@
     clearTimeout(tipTimer);
     const cat = GFLUX.CATEGORIES.find((c) => c.id === def.cat) || GFLUX.CATEGORIES[0];
     tip.className = 'tip w-' + cat.color;
-    tip.innerHTML = `<div class="tip-cat">${esc(cat.name)}</div>` +
+    // A picture of the part, drawn the same way as on the canvas.
+    const pad = 1.6 * G, vb = `${-pad} ${-pad} ${def.w * G + pad * 2} ${Math.max(def.h, 1) * G + pad * 2}`;
+    const visual = `<div class="tip-photo tip-art"><svg viewBox="${vb}" aria-hidden="true">${artCache.get(def.id) || GFLUX.art.draw(def)}</svg></div>`;
+    tip.innerHTML = visual + `<div class="tip-cat">${esc(cat.name)}</div>` +
       `<div class="tip-name">${esc(def.name)}</div><div class="tip-full">${esc(def.full)}</div>` +
       (def.tip ? `<p class="tip-help">${esc(def.tip)}</p>` : '') +
       `<a class="tip-buy" href="${esc(GFLUX.amazonUrl(def))}" target="_blank" rel="noopener noreferrer">Find it on Amazon <span aria-hidden="true">↗</span></a>`;
@@ -783,8 +832,21 @@
   svg.addEventListener('pointerdown', (e) => {
     if (e.button === 2) return;
     closeMenus();
+    // Clicking the canvas takes focus away from inputs, so shortcuts like Ctrl+C work.
+    if (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) document.activeElement.blur();
     const world = screenToWorld(e.clientX, e.clientY);
     const ref = refFromEl(e.target);
+
+    if (simRunning) {
+      // While code runs, parts act like the real thing (press a button) and the circuit can't be edited.
+      const partEl = e.target.closest('.part, .part-label');
+      svg.setPointerCapture(e.pointerId);
+      if (partEl) {
+        drag = { mode: 'simpress', uid: partEl.dataset.uid, sx: e.clientX, sy: e.clientY };
+        simHooks.press.forEach((fn) => fn(partEl.dataset.uid, true));
+      } else drag = { mode: 'pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, moved: false };
+      return;
+    }
 
     if (drag && drag.mode === 'wire' && drag.sticky) {
       if (ref) { finishWire(ref); endWire(); }
@@ -853,8 +915,15 @@
     }
   });
 
-  svg.addEventListener('pointerup', () => {
+  svg.addEventListener('pointerup', (e) => {
     if (!drag) return;
+    if (drag.mode === 'simpress') {
+      const uid = drag.uid, still = Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) < 6;
+      drag = null;
+      simHooks.press.forEach((fn) => fn(uid, false));
+      if (still) simHooks.click.forEach((fn) => fn(uid));
+      return;
+    }
     if (drag.mode === 'wire') {
       if (drag.sticky) return;
       if (drag.hover) { finishWire(drag.hover); endWire(); return; }
@@ -895,6 +964,35 @@
     view.y = py - ((py - view.y) / view.k) * k;
     view.k = k;
     render();
+  }
+
+  /** The view that shows the whole project. */
+  function fitTarget() {
+    const r = svg.getBoundingClientRect();
+    if (!state.parts.length) return { x: r.width / 2, y: r.height / 2, k: 1 };
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of state.parts) {
+      const b = GFLUX.partBox(p);
+      x0 = Math.min(x0, b.x - 2); y0 = Math.min(y0, b.y - 3); x1 = Math.max(x1, b.x + b.w + 2); y1 = Math.max(y1, b.y + b.h + 2);
+    }
+    for (const pts of allRoutes().values()) for (const q of pts) { x0 = Math.min(x0, q.x - 1); y0 = Math.min(y0, q.y - 1); x1 = Math.max(x1, q.x + 1); y1 = Math.max(y1, q.y + 1); }
+    const left = 70, right = r.width - rightInset(r);
+    const k = Math.min(1.6, Math.max(0.25, Math.min((right - left - 20) / ((x1 - x0) * G), (r.height - 100) / ((y1 - y0) * G))));
+    return { k, x: (left + right) / 2 - ((x0 + x1) / 2) * G * k, y: r.height / 2 - ((y0 + y1) / 2) * G * k };
+  }
+
+  /** Smoothly glide the view to `target` (ease-out lerp). */
+  function animateView(target, ms) {
+    const from = Object.assign({}, view), t0 = performance.now();
+    return new Promise((done) => {
+      const step = (now) => {
+        const t = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - t, 3);
+        view = { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, k: from.k + (target.k - from.k) * e };
+        render();
+        if (t < 1) requestAnimationFrame(step); else done();
+      };
+      requestAnimationFrame(step);
+    });
   }
 
   function fitView() {
@@ -950,6 +1048,30 @@
     changed();
   }
 
+  let clipboard = null;
+  function copySelection() {
+    if (!sel || sel.kind !== 'part') { toast('Select a part to copy.', 'warn'); return false; }
+    const inst = instOf(sel.id);
+    clipboard = { type: inst.type, rot: inst.rot, x: inst.x, y: inst.y };
+    store.set('gflux.clipboard', JSON.stringify(clipboard));
+    toast(`Copied ${GFLUX.getPart(inst.type).name}.`);
+    return true;
+  }
+  function pasteClipboard() {
+    if (!clipboard) { try { clipboard = JSON.parse(store.get('gflux.clipboard') || 'null'); } catch (e) { clipboard = null; } }
+    const def = clipboard && GFLUX.getPart(clipboard.type);
+    if (!def) { toast('Nothing to paste yet. Select a part and press Ctrl+C.', 'warn'); return; }
+    snapshot();
+    const spot = freeSpot(def, clipboard.x + 3, clipboard.y + 3, true);
+    const inst = { uid: newId('p'), type: clipboard.type, x: spot.x, y: spot.y, rot: clipboard.rot || 0 };
+    state.parts.push(inst);
+    clipboard = Object.assign({}, clipboard, { x: spot.x, y: spot.y }); // the next paste steps along
+    sel = { kind: 'part', id: inst.uid };
+    ensureVisible(inst);
+    changed();
+    toast(`Pasted ${def.name}.`);
+  }
+
   function recolorAll() {
     if (!state.wires.length) return;
     snapshot();
@@ -973,8 +1095,13 @@
     if (e.key === 'Escape' && openTab) { closeMenus(); return; }
     if (e.key === 'Escape' && !fin.hidden) { closeFinalize(); return; }
     if (typing) return;
+    if (simRunning && !(mod && e.key.toLowerCase() === 's')) return; // stop the code to edit
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack); return; }
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); restore(redoStack, undoStack); return; }
+    if (simRunning) return;
+    if (mod && e.key.toLowerCase() === 'c') { copySelection(); return; }
+    if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); pasteClipboard(); return; }
+    if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); if (copySelection()) pasteClipboard(); return; }
     if (e.key === 'Escape') {
       if (drag && drag.mode === 'wire') { endWire(); return; }
       sel = null; closeModal(); render();
@@ -1131,7 +1258,8 @@
   }
 
   function setKicad(data) {
-    const chip = $('#kicadChip'), chipText = $('#kicadChip span'), status = $('#kicadStatus');
+    const status = $('#kicadStatus');
+    const chip = { dataset: {} }, chipText = {}; // the top-bar chip became the Finalize button
     $$('.needs-app').forEach((b) => { b.disabled = !appBase; });
     let st, text, detail = '';
     if (!appBase || !data) {
@@ -1209,10 +1337,34 @@
   const fin = $('#finalize');
   function closeFinalize() { fin.hidden = true; fin.innerHTML = ''; }
 
-  /** White screen with every problem in a few words, then back out or finalize. */
-  function openFinalize() {
+  let finalizing = false;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /** Glide to show the whole project, sweep the grid through the rainbow with
+   *  rainbow screen edges, then the white review screen. */
+  async function openFinalize() {
+    if (finalizing || simRunning) return;
+    finalizing = true;
     closeMenus();
     tip.hidden = true;
+    sel = null;
+    try {
+      await animateView(fitTarget(), 650);
+      document.body.classList.add('fin-intro');
+      gridRainbow = performance.now();
+      requestGrid();
+      await sleep(950);
+      showReview();
+    } finally {
+      gridRainbow = 0;
+      requestGrid();
+      setTimeout(() => document.body.classList.remove('fin-intro'), 200);
+      finalizing = false;
+    }
+  }
+
+  /** White screen with every problem in a few words, then back out or finalize. */
+  function showReview() {
     const issues = GFLUX.check.run(state);
     const errors = issues.filter((i) => i.level === 'error').length, warns = issues.length - errors;
     const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
@@ -1321,6 +1473,9 @@
     install: () => kicadAction('install'),
     recolor: recolorAll,
     finalize: openFinalize,
+    copy: copySelection,
+    paste: pasteClipboard,
+    duplicate: () => { if (copySelection()) pasteClipboard(); },
   };
 
   function bindMenus() {
@@ -1330,20 +1485,19 @@
       tab.addEventListener('pointerleave', () => tint(null));
     });
     document.addEventListener('pointerdown', (e) => {
-      if (openTab && !e.target.closest('.tab') && !e.target.closest('#kicadChip')) closeMenus();
+      if (openTab && !e.target.closest('.tab')) closeMenus();
     });
     document.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-act]');
-      if (!b || b.disabled) return;
+      // Only the editor's own buttons (menus, tools); the Code panel has its own data-act buttons.
+      const b = e.target.closest('#topbar [data-act], .tools [data-act]');
+      if (!b || b.disabled || !ACTIONS[b.dataset.act]) return;
+      if (simRunning && !['save', 'sch', 'pcb', 'zip', 'recheck', 'locate', 'install'].includes(b.dataset.act)) {
+        toast('Stop the running code to change the circuit.', 'warn');
+        return;
+      }
       ACTIONS[b.dataset.act]();
       if (!b.closest('.menu-form')) closeMenus();
     });
-    $('#kicadChip').addEventListener('click', () => {
-      const tab = $('.tab[data-menu="kicad"]');
-      openTab === tab ? closeMenus() : openMenu(tab);
-    });
-    $('#kicadChip').addEventListener('pointerenter', () => tint($('.tab[data-menu="kicad"]')));
-    $('#kicadChip').addEventListener('pointerleave', () => tint(null));
   }
 
   // ------------------------------------------------- animation & colour menus
@@ -1535,7 +1689,7 @@
     if (getComputedStyle(document.documentElement).getPropertyValue('--gx-css').trim() !== '1') return;
     document.documentElement.classList.add('gx-ready');
     $('#defs').innerHTML = GFLUX.art.DEFS + $('#defs').innerHTML +
-      '<radialGradient id="gx-pulse"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".3" stop-color="#fff" stop-opacity=".9"/><stop offset=".65" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>';
+      '<radialGradient id="gx-pulse"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".35" stop-color="#fff" stop-opacity=".32"/><stop offset=".7" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>';
     bindUI();
     let saved = null;
     try { saved = JSON.parse(store.get('gflux.autosave') || 'null'); } catch (e) { saved = null; }
@@ -1543,13 +1697,100 @@
     render();
     fitView();
     if (GFLUX.assistant) GFLUX.assistant.mount($('#assistantRoot'), { getState: () => state, toast });
-    connectApp();
+    showSplash().then(connectApp);
     // Ask Chrome to keep GFLUX's saved work even when the disk gets full.
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
     if (!saved) setTimeout(() => toast('Welcome to GFLUX! Open the Library on the right to add parts.'), 400);
   }
 
-  // Exposed for tests and the assistant.
-  window.GFLUX.app = { get state() { return state; }, addPart, render, fitView, toast, runAutowire };
+  /** Welcome screen on every start, thanking the tools GFLUX was built with. */
+  function showSplash() {
+    const el = document.getElementById('splash');
+    if (!el) return Promise.resolve();
+    el.hidden = false;
+    const btn = el.querySelector('[data-splash]');
+    btn.focus();
+    return new Promise((done) => {
+      const close = () => { el.hidden = true; document.removeEventListener('keydown', key, true); done(); };
+      const key = (e) => { if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); close(); } };
+      btn.addEventListener('click', close, { once: true });
+      document.addEventListener('keydown', key, true);
+    });
+  }
+
+  // --------------------------------------------- converter output voltage
+  const settings = document.getElementById('partSettings');
+  function placePartSettings() {
+    if (!settings) return;
+    const inst = sel && sel.kind === 'part' ? instOf(sel.id) : null;
+    const def = inst && GFLUX.getPart(inst.type);
+    if (!def || !def.converter || simRunning) { settings.hidden = true; return; }
+    const box = GFLUX.partBox(inst);
+    settings.style.transform = `translate(${(box.x + box.w + 1.2) * G * view.k + view.x}px, ${(box.y - 0.5) * G * view.k + view.y}px)`;
+    if (settings.hidden || settings.dataset.uid !== inst.uid) {
+      settings.dataset.uid = inst.uid;
+      const input = settings.querySelector('input');
+      input.value = inst.vout != null ? inst.vout : def.vout;
+      input.min = def.voutRange[0]; input.max = def.voutRange[1];
+      settings.querySelector('.ps-range').textContent = `${def.converter === 'buck' ? 'Step-down' : 'Step-up'} · ${def.voutRange[0]}–${def.voutRange[1]} V`;
+    }
+    settings.hidden = false;
+  }
+  if (settings) {
+    const input = settings.querySelector('input');
+    input.addEventListener('focus', () => snapshot());
+    input.addEventListener('input', () => {
+      const inst = instOf(settings.dataset.uid), v = parseFloat(input.value);
+      if (!inst || !isFinite(v)) return;
+      inst.vout = v;
+      store.set('gflux.autosave', JSON.stringify(state));
+      updateLiveIssues();
+      render();
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  }
+
+  // Clicking a live problem jumps to the part; × hides it until something changes.
+  const liveBox = document.getElementById('liveIssues');
+  if (liveBox) liveBox.addEventListener('click', (e) => {
+    if (e.target.closest('.x')) { liveDismissed = liveSig; liveBox.hidden = true; return; }
+    const li = e.target.closest('li[data-uid]');
+    const inst = li && instOf(li.dataset.uid);
+    if (inst) { sel = { kind: 'part', id: inst.uid }; ensureVisible(inst); render(); }
+  });
+
+  // ------------------------------------------------------- simulator hooks
+  let simRunning = false;
+  const simHooks = { click: [], press: [] };
+
+  /** Replace the project (used by examples); undo brings the old one back. */
+  function loadProject(next) {
+    snapshot();
+    loadState(JSON.parse(JSON.stringify(next)));
+    changed();
+    fitView();
+  }
+
+  // Exposed for tests, the Code panel and the simulator.
+  window.GFLUX.app = {
+    get state() { return state; },
+    addPart, render, fitView, toast, runAutowire, loadProject,
+    /** Base URL of the GFLUX app when this page is served by it, else null. */
+    get appBase() { return appBase; },
+    /** Call the GFLUX app: -> { status, data }. */
+    api: (path, opts) => api(path, opts),
+    simLayer: document.getElementById('L-sim'),
+    /** fn(uid) when a part is clicked while code runs. */
+    onPartClick(fn) { simHooks.click.push(fn); },
+    /** fn(uid, pressed) when a part is pressed / released while code runs. */
+    onPartPress(fn) { simHooks.press.push(fn); },
+    get isRunning() { return simRunning; },
+    set isRunning(v) {
+      simRunning = !!v;
+      document.body.classList.toggle('sim-running', simRunning);
+      if (simRunning) { sel = null; if (drag && drag.mode !== 'pan') drag = null; closeFinalize(); }
+      render();
+    },
+  };
   boot();
 })();
