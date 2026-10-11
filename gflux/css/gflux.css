@@ -309,9 +309,14 @@ body.sim-running .part { cursor: pointer; }
 .lg-esc { color: var(--ink-2); font-weight: 400; }
 
 .tip {
-  position: absolute; z-index: 25; left: 0; top: 0; width: 270px; padding: 12px 14px 14px;
+  position: absolute; z-index: 25; left: 0; top: 0; width: 290px; padding: 12px 14px 14px; overflow: hidden;
   background: #fff; color: var(--ink); border: 1px solid var(--line); border-top: 4px solid var(--w, var(--ink)); box-shadow: var(--shadow);
 }
+.tip-photo { margin: -12px -14px 10px; height: 170px; background: #f4f4f6; display: grid; place-items: center; position: relative; overflow: hidden; }
+.tip-photo img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.tip-photo figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 8px; font-size: 10px; color: #fff; background: rgba(0, 0, 0, 0.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tip-art svg { width: 86%; height: 86%; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.25)); }
+.tip-art .gx-silk { font-family: var(--font-mono); }
 .tip-cat { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
 .tip-cat::before { content: ''; width: 20px; height: 5px; background: var(--w); }
 .tip-name { font-size: 17px; font-weight: 700; margin-top: 4px; }

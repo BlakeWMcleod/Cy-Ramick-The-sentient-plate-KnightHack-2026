@@ -731,7 +731,13 @@
     clearTimeout(tipTimer);
     const cat = GFLUX.CATEGORIES.find((c) => c.id === def.cat) || GFLUX.CATEGORIES[0];
     tip.className = 'tip w-' + cat.color;
-    tip.innerHTML = `<div class="tip-cat">${esc(cat.name)}</div>` +
+    // A real photo when we have a freely licensed one, otherwise the part's own drawing.
+    const photo = GFLUX.PART_IMAGES && GFLUX.PART_IMAGES[def.id];
+    const pad = 1.6 * G, vb = `${-pad} ${-pad} ${def.w * G + pad * 2} ${Math.max(def.h, 1) * G + pad * 2}`;
+    const visual = photo
+      ? `<figure class="tip-photo"><img src="${esc(photo.src)}" alt="${esc(def.full)}"><figcaption>Photo: ${esc(photo.author || 'unknown')} · ${esc(photo.license || '')}</figcaption></figure>`
+      : `<div class="tip-photo tip-art"><svg viewBox="${vb}" aria-hidden="true">${artCache.get(def.id) || GFLUX.art.draw(def)}</svg></div>`;
+    tip.innerHTML = visual + `<div class="tip-cat">${esc(cat.name)}</div>` +
       `<div class="tip-name">${esc(def.name)}</div><div class="tip-full">${esc(def.full)}</div>` +
       (def.tip ? `<p class="tip-help">${esc(def.tip)}</p>` : '') +
       `<a class="tip-buy" href="${esc(GFLUX.amazonUrl(def))}" target="_blank" rel="noopener noreferrer">Find it on Amazon <span aria-hidden="true">↗</span></a>`;
