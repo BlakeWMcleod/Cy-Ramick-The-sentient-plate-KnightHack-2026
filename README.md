@@ -1,90 +1,120 @@
-# Cy-Ramick-The-sentient-plate-KnightHack-2026
-A extension to the underside of your plate that tunrs it into a scared, god-fearing plate
+<p align="center"><img src="gflux/img/banner.png" alt="GFLUX" width="520"></p>
 
-## Firmware (`firmware/sentient_plate/sentient_plate.ino`)
+# GFLUX
 
-The plate talks continuously. Each clip is chosen from the SD-card folder that matches the plate's current orientation, and changes in orientation fade the current clip out before fading the next one in.
+GFLUX is a beginner-friendly circuit builder for ESP32 projects. Drop real hobby modules onto a grid, connect them with jumper wires, and GFLUX checks the wiring as you go. It shows current moving through each wire and turns your circuit into KiCad files and ready-to-upload Arduino code.
 
-### Hardware
+## Get started
 
-| Part | ESP32 pin |
+1. Download **GFLUX-Windows.exe** from **[Releases → GFLUX (latest build)](https://github.com/BlakeWMcleod/Cy-Ramick-The-sentient-plate-KnightHack-2026/releases/tag/gflux-latest)**. macOS and Linux builds are on the same page.
+2. Double-click it. GFLUX opens in your browser.
+3. The app looks for KiCad on your computer. If KiCad isn't there, it offers to **install** it, or to **locate** an install it couldn't find.
+
+Keep the small console window open while you work. Closing it quits GFLUX.
+
+> The app isn't code-signed. On Windows, click **More info → Run anyway** the first time. On macOS, right-click it and choose **Open**.
+
+Opening `gflux/index.html` directly also works, but without KiCad PDFs or Gerbers. The page asks you to use the app instead.
+
+## Using GFLUX
+
+| To… | Do this |
 | --- | --- |
-| DFPlayer Mini RX (pin 2) | GPIO 17 (TX2) |
-| DFPlayer Mini TX (pin 3) | GPIO 16 (RX2) |
-| DFPlayer Mini BUSY (pin 16) | GPIO 4 |
-| GY-521 (MPU-6050) SDA / SCL | GPIO 21 / GPIO 22 |
-| TCRT5000 sensors 1–5, DO | GPIO 32, 33, 25, 26, 27 |
-| Button 1 (wait for lift), other leg to GND | Any of GPIO 0 (BOOT button), 12, 14, 18 |
-| Button 2 (mute), other leg to GND | Any of GPIO 5, 13, 15, 19, 23 |
+| Add a part | Open **Library** on the right, then click a part or drag it onto the grid |
+| See a part's full name and where to buy it | Hover over its name tag |
+| Wire a part automatically | Click the **⚡** next to its name. Power, ground and the right ESP32 pins are wired for you |
+| Wire by hand | Drag from one pin to another. Let go on empty grid to leave the end loose, or click a pin and then click the grid to add bends |
+| Rotate / delete | Select, then press <kbd>R</kbd> / <kbd>Del</kbd>, or use the tools on the left |
+| Undo / redo | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
+| Save / open | **File** menu. Work also autosaves in your browser |
 
-The five TCRT5000 sensors face down at the table from the rim of the enclosure. When all of them see the table, the plate is resting. When none of them do, it has been lifted. When only some do, it is hanging over the edge of the table.
+### Safe wiring
 
-Switch the plate on while it rests flat on the table. At boot, the firmware records that orientation as "flat" and reads each IR sensor's output level as its "sees the table" level, so the sensor polarity does not need to be known in advance.
+While you drag a wire, the screen dims and every pin is marked:
 
-### Buttons
-
-Every spare even-numbered GPIO acts as button 1 and every spare odd-numbered GPIO as button 2, so touching any of those pins to GND works as a press. The board's BOOT button (GPIO 0) is also button 1. Pins already in use, the flash pins (6–11), USB serial (1, 3), the onboard LED (2) and the input-only pins (34–39) are excluded.
-
-- **Button 1 – wait for lift:** fades the plate to silence. It stays quiet until it has been set on the table and then lifted off it, at which point it starts talking again. Press again to cancel.
-- **Button 2 – mute:** toggles mute. Unmuting fades a new clip in.
-
-### SD card layout
-
-| Folder | Situation |
+| Mark | Meaning |
 | --- | --- |
-| `01` | On the edge of a table |
-| `02` | Flat (resting on the table, or lifted and held level) |
-| `03` – `10` | Tilted 15–35°, 35–55°, 55–75°, 75–95°, 95–115°, 115–140°, 140–165°, 165–180° |
+| **Green** | Good match: power to a supply, ground to ground, signal to a GPIO, or the default I2C pins |
+| **Blue** | Works |
+| **Yellow** | Works, but be careful: strapping pins, input-only pins, or powering a module from a GPIO |
+| **Red dashed** | Blocked, because it would short a supply to GND, join two supplies, tie a GPIO to power, or put 5 V on a 3.3 V-only part |
 
-Use a FAT32 card of 32 GB or smaller. Name the files `001.mp3`, `002.mp3`, … inside each numbered folder (not the `/mp3` folder), and copy them in order. Install the **DFRobotDFPlayerMini** library from the Arduino Library Manager before compiling.
+Wiring an LED straight to a GPIO or a supply automatically adds a 220 Ω resistor. You can turn that off in the **Wire color** menu.
 
-## Hardware self-test (`firmware/plate_selftest/plate_selftest.ino`)
+### Wire colours
 
-Upload this sketch to check every part before installing the main firmware. Copy `Beep.mp3` and then `Metal Beep.mp3`, in that order, to the root of an empty SD card. The DFPlayer numbers root files by copy order.
+With **Auto** selected, each wire takes the colour printed on the ESP32 pin it connects to:
 
-1. Set the plate flat on the table and switch it on.
-2. **Two beeps:** pick the plate up, tilt it onto its side, and set it back down within 15 s.
-3. **Two beeps:** press button 1. **Two beeps:** press button 2. One beep confirms each step.
-4. **One beep and a steady blue LED:** everything passed. Otherwise each failure plays **metal beeps** for the error code, followed by normal beeps for the sensor or button number.
-5. Press either button afterwards to hear the result again.
+- **Signal pins:** cycle through red, orange, yellow, green, blue, indigo and violet down the header
+- **Power:** red
+- **Ground:** black
 
-| Code | Problem | Check |
-| --- | --- | --- |
-| 1 | DFPlayer not responding (LED blinks only) | DFPlayer TX/RX wires and power (D2) |
-| 2 | SD card unreadable or fewer than 2 files | FAT32, 32 GB or smaller, both MP3s copied |
-| 3 | DFPlayer BUSY wire | DFPlayer pin 16 to GPIO4 |
-| 4 | MPU-6050 not found | SDA GPIO21, SCL GPIO22, 3V3, GND |
-| 5 | MPU-6050 bad data: .1 gravity wrong, .2 frozen, .3 no tilt seen | Wiring, or a damaged module |
-| 6.n | IR sensor *n* wire disconnected | DO wire to its GPIO |
-| 7.n | IR sensor *n* did not react when lifted | VCC/GND, or turn its trimpot |
-| 8.n | Button *n* stuck pressed | Shorted to GND |
-| 9.n | Button *n* not pressed during the test | Wiring, or not installed yet |
-| 10 | Last restart was a brownout | Weak batteries or power wiring (D1, VIN) |
+The **Wire color** menu also has the nine jumper colours, a custom colour picker, and **Auto-color all wires**.
 
-Results are saved in the ESP32's flash. The previous report is printed on Serial (115200 baud) at every start, and holding button 1 while switching on replays it without re-testing (use GPIO 12, 14 or 18 for this; holding BOOT at power-on enters upload mode). Buttons follow the same even/odd pin rule as the main firmware.
+### Animation
 
-## Enclosure (`enclosure/`)
+Moving dashes show the way current flows, treating the ESP32 as the power source:
 
-`make_enclosure.py` generates the round 3D-printed tray and lid (140 mm across, 24.3 mm tall) that sit under the plate, along with stand-in blocks for every component. All dimensions are parameters at the top of the script.
+- **Yellow:** power leaving a supply
+- **White:** current returning to ground
+- **Blue:** signals between the ESP32 and each module
 
-| File | Contents |
-| --- | --- |
-| `tray.stl`, `lid.stl` | Print files in mm. Print the tray floor-down; the lid is already flipped tabs-up. No supports. |
-| `plate_enclosure.blend` | Assembled model with component stand-ins (not printed). |
-| `preview_inside.png`, `preview_outside.png` | Renders with the lid off and on. |
+In the **Animation** menu you can change the speed, spacing, size and style (dashes, dots or pulses), and choose which kinds of wire are animated.
 
-To cut print time, the outer wall is a closed 1.6 mm shell (4 perimeters with a 0.4 mm nozzle). The floor is open wherever nothing rests on it, keeping solid pads under each part plus a rim and radial ribs, and the lid is a 5 mm ring with locating tabs. At 140 mm this uses 43.1 cm³ of plastic, about 45% less than the original 156 mm solid design. Set `FLOOR_CUTOUTS = False` or `LID_RING_W = 0` to return to a solid floor or lid.
+### KiCad
 
-Rebuild after changing a parameter (run in the `enclosure` folder):
+The **KiCad** menu offers:
 
+- **Create schematic:** a `.kicad_sch` file, plus a PDF when KiCad is connected
+- **Create PCB:** a `.kicad_pcb` file with every module placed where it is on the canvas (1 grid square = 2.54 mm), plus Gerbers, drill files and a PDF when KiCad is connected
+- **Download KiCad project:** a `.zip` with the project, schematic, board and generated `.ino` sketch
+- **Check again / Locate / Install:** ask the app to find KiCad, point it at your install, or install KiCad for you
+
+### Code AI
+
+The **Code AI** panel on the right writes ESP32 Arduino code for your circuit:
+
+- **Starter code** works offline and uses the pins you actually wired.
+- For free-form requests ("beep when something is closer than 10 cm"), add an [Anthropic API key](https://console.anthropic.com/settings/keys) under **AI settings**. The key stays in your browser.
+
+## Parts library
+
+About 50 modules you can buy on Amazon, each with a plain name (for example "Distance sensor" instead of "HC-SR04 Ultrasonic Distance Sensor Module") and its real pinout:
+
+- **Boards:** ESP32 DevKit V1, ESP32-C3 SuperMini
+- **Basics:** resistor, push button, slide switch, knob
+- **Lights:** LED, RGB LED, LED ring and strip, LED grid
+- **Sensors:** distance (ultrasonic and laser), temperature and humidity, weather, motion, light, sound, soil, gas, tilt, line, magnet, heart rate, weight, GPS
+- **Input:** touch, joystick, clicky knob, keypad, IR remote, RFID
+- **Screens:** OLED, 16×2 LCD, 4-digit display
+- **Motors:** servo, DC motor and driver, stepper, relay, vibration
+- **Sound & storage:** buzzer, speaker and amp, MP3 player, SD card, clock module
+- **Power:** battery pack, charger, regulator, breadboard supply
+
+You can also add your own parts from the bottom of the library.
+
+## For developers
+
+GFLUX is plain HTML, CSS and JavaScript with no build step. The desktop app is a small Python program.
+
+```bash
+python3 gflux/tools/gflux_app.py         # run the app from source
+pip install pyinstaller pillow
+python gflux/tools/build_app.py          # build the app (GFLUX.exe on Windows)
+python3 -m unittest discover gflux/tools/tests -v
 ```
-"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe" -b --factory-startup --python make_enclosure.py
-```
 
-The script checks that no component hits a wall, the lid, or another component, and that both print parts are watertight. It prints `CHECK: OK` when everything passes.
+Every push that changes `gflux/` rebuilds the Windows, macOS and Linux apps (`.github/workflows/gflux-app.yml`) and updates the release.
 
-Before printing:
+| Path | What it does |
+| --- | --- |
+| `gflux/index.html`, `gflux/css/` | Page layout and styles |
+| `gflux/js/parts.js` | Parts library: pinouts, plain names, Amazon searches, code snippets |
+| `gflux/js/netlist.js`, `gflux/js/rules.js` | Circuit model, wiring safety rules and current-flow directions |
+| `gflux/js/autowire.js` | One-click auto-wiring |
+| `gflux/js/app.js`, `gflux/js/art.js` | Editor, wire router and part artwork |
+| `gflux/js/kicad.js` | KiCad schematic, PCB and project writers |
+| `gflux/js/codegen.js`, `gflux/js/assistant.js` | Starter code and the Code AI panel |
+| `gflux/tools/` | Desktop app, KiCad bridge, build script and tests |
 
-- Measure the inside diameter of the plate's foot ring and set `PLATE_FOOT_RING_ID`. The enclosure needs about 2 mm of clearance.
-- The layout is packed for the smallest size: the ESP32 sits on the left with its USB-C port in the wall, the battery holder is turned 90° on the right, the speaker vents face the front-left, and the two buttons are in the back wall. The five IR sensors are spread no more than 80° apart around the rim. Some parts are only a fraction of a millimetre apart, so plan wire routes before gluing. Increase `R` for more wiring room and rerun the checks.
-- Hold a TCRT5000 module against its floor window. If the window is off-centre, adjust `IR_SENSOR_U` and rebuild.
+The ESP32 firmware for the sentient plate lives in [`firmware/`](firmware/README.md).

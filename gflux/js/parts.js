@@ -56,6 +56,12 @@ GFLUX.PARTS = [
     controller: true, gpio: ESP32_GPIO, i2c: { SDA: 21, SCL: 22 },
     rails: { '3V3': '3V3', VIN: '5V', GND: 'GND' },
     inputOnly: ['VP', 'VN', 'D34', 'D35'],
+    // Auto-wire: preferred GPIOs, ADC1 pins (ADC2 stops working with Wi-Fi), SPI bus,
+    // and uart = module pin -> board pin (crossed over: module TX goes to RX2).
+    autoOrder: ['D4', 'D5', 'D13', 'D14', 'D18', 'D19', 'D23', 'D25', 'D26', 'D27', 'D32', 'D33', 'RX2', 'TX2', 'D15', 'D2', 'D12'],
+    adc: ['D34', 'D35', 'VP', 'VN', 'D32', 'D33'],
+    spi: { SCK: 'D18', MISO: 'D19', MOSI: 'D23' },
+    uart: { RX: 'TX2', TX: 'RX2' },
     caution: { EN: 'EN is the reset pin', TX0: 'TX0 is used by USB serial', RX0: 'RX0 is used by USB serial', D12: 'D12 must be LOW at boot', D2: 'D2 drives the onboard LED' },
     tip: 'Your circuit\'s brain. Runs Arduino code, has Wi-Fi and Bluetooth. Use 3V3 for most sensors.',
     pins: {
@@ -69,6 +75,10 @@ GFLUX.PARTS = [
     q: 'ESP32-C3 SuperMini development board', board: PCB.blue, art: 'c3', w: 6, h: 9,
     controller: true, gpio: C3_GPIO, i2c: { SDA: 8, SCL: 9 },
     rails: { '5V': '5V', '3V3': '3V3', GND: 'GND' },
+    autoOrder: ['IO10', 'IO7', 'IO6', 'IO5', 'IO4', 'IO3', 'IO1', 'IO0', 'IO2', 'IO8', 'IO20', 'IO21'],
+    adc: ['IO0', 'IO1', 'IO3', 'IO4', 'IO2'],
+    spi: { SCK: 'IO4', MISO: 'IO5', MOSI: 'IO6' },
+    uart: { RX: 'IO21', TX: 'IO20' },
     caution: { IO9: 'IO9 is the BOOT button pin', IO2: 'IO2 is a boot strapping pin', IO8: 'IO8 drives the onboard LED', IO20: 'IO20 is serial RX', IO21: 'IO21 is serial TX' },
     tip: 'Thumb-sized ESP32. Fewer pins, same Arduino code.',
     pins: {
@@ -132,7 +142,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'ledring', name: 'LED ring', mpn: 'WS2812B-16', cat: 'lights', ref: 'D',
+    id: 'ledring', name: 'LED ring', mpn: 'WS2812B-16', cat: 'lights', ref: 'D', power: '5V',
     full: 'WS2812B 16-LED Addressable RGB Ring (NeoPixel compatible)', q: 'WS2812B 16 LED ring',
     board: PCB.black, art: 'ring', w: 5, h: 6, pins: ['5V', 'GND', 'DIN', 'DOUT'],
     tip: 'Every LED can be any color. Wire DIN to a GPIO. Needs the Adafruit NeoPixel library.',
@@ -144,7 +154,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'ledstrip', name: 'LED strip', mpn: 'WS2812B-strip', cat: 'lights', ref: 'D',
+    id: 'ledstrip', name: 'LED strip', mpn: 'WS2812B-strip', cat: 'lights', ref: 'D', power: '5V',
     full: 'WS2812B Addressable RGB LED Strip (60 LED/m, 5 V)', q: 'WS2812B LED strip 5V 60 LED',
     board: PCB.white, art: 'strip', w: 8, h: 3, pins: ['5V', 'DIN', 'GND'],
     tip: 'A strip of individually controllable LEDs. Use a separate 5 V supply for long strips.',
@@ -156,7 +166,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'matrix', name: 'LED grid', mpn: 'MAX7219-8x8', cat: 'lights', ref: 'U',
+    id: 'matrix', name: 'LED grid', mpn: 'MAX7219-8x8', cat: 'lights', ref: 'U', power: '5V',
     full: 'MAX7219 8×8 LED Dot Matrix Module', q: 'MAX7219 8x8 LED matrix module',
     board: PCB.blue, art: 'matrix', w: 8, h: 8, pins: { left: ['VCC', 'GND', 'DIN', 'CS', 'CLK'] },
     tip: 'Draw pixels, icons or scrolling text on 64 red LEDs.',
@@ -170,7 +180,7 @@ GFLUX.PARTS = [
 
   // ---------------------------------------------------------------- Sensors
   {
-    id: 'hcsr04', name: 'Distance sensor', mpn: 'HC-SR04', cat: 'sensors', ref: 'U',
+    id: 'hcsr04', name: 'Distance sensor', mpn: 'HC-SR04', cat: 'sensors', ref: 'U', power: '5V',
     full: 'HC-SR04 Ultrasonic Distance Sensor Module (2–400 cm)', q: 'HC-SR04 ultrasonic sensor',
     board: PCB.blue, art: 'ultrasonic', w: 9, h: 5, pins: ['VCC', 'TRIG', 'ECHO', 'GND'],
     tip: 'Measures distance with sound. Runs on 5 V (VIN). ECHO outputs 5 V, so add a 1k/2k voltage divider to be safe.',
@@ -224,7 +234,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'pir', name: 'Motion sensor', mpn: 'HC-SR501', cat: 'sensors', ref: 'U',
+    id: 'pir', name: 'Motion sensor', mpn: 'HC-SR501', cat: 'sensors', ref: 'U', power: '5V',
     full: 'HC-SR501 PIR Infrared Motion Sensor Module', q: 'HC-SR501 PIR motion sensor',
     board: PCB.green, art: 'dome', w: 6, h: 6, pins: ['VCC', 'OUT', 'GND'],
     tip: 'OUT goes HIGH when a person moves in front of it. Power it from VIN (5 V).',
@@ -252,7 +262,7 @@ GFLUX.PARTS = [
     code: { glob: 'const int SOIL[[n]]_PIN = [[AOUT]];', loop: 'Serial.printf("Soil [[n]]: %d\\n", analogRead(SOIL[[n]]_PIN));' },
   },
   {
-    id: 'mq2', name: 'Gas & smoke sensor', mpn: 'MQ-2', cat: 'sensors', ref: 'U',
+    id: 'mq2', name: 'Gas & smoke sensor', mpn: 'MQ-2', cat: 'sensors', ref: 'U', power: '5V',
     full: 'MQ-2 Gas / Smoke / LPG Sensor Module', q: 'MQ-2 gas sensor module',
     board: PCB.blue, art: 'gas', w: 5, h: 5, pins: ['VCC', 'GND', 'DO', 'AO'],
     tip: 'Senses smoke and flammable gas. Needs 5 V and warms up for ~1 minute.',
@@ -295,7 +305,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'loadcell', name: 'Weight sensor', mpn: 'HX711', cat: 'sensors', ref: 'U',
+    id: 'loadcell', name: 'Weight sensor', mpn: 'HX711', cat: 'sensors', ref: 'U', noAuto: ['E+', 'E-', 'A+', 'A-', 'B+', 'B-'],
     full: 'HX711 Load Cell Amplifier + 5 kg Load Cell Kit', q: 'HX711 load cell kit 5kg',
     board: PCB.green, art: 'chip', w: 7, h: 7,
     pins: { left: ['E+', 'E-', 'A-', 'A+', 'B-', 'B+'], right: ['GND', 'DT', 'SCK', 'VCC'] },
@@ -393,7 +403,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'lcd', name: 'Text screen', mpn: 'LCD1602-I2C', cat: 'screens', ref: 'U',
+    id: 'lcd', name: 'Text screen', mpn: 'LCD1602-I2C', cat: 'screens', ref: 'U', power: '5V',
     full: '16×2 LCD1602 Display with I2C Backpack (PCF8574)', q: 'LCD1602 I2C module',
     board: PCB.green, art: 'lcd', w: 16, h: 7, pins: { left: ['GND', 'VCC', 'SDA', 'SCL'] },
     tip: 'Two lines of 16 characters. Power it from VIN (5 V).',
@@ -416,7 +426,7 @@ GFLUX.PARTS = [
 
   // ---------------------------------------------------------------- Motors
   {
-    id: 'servo', name: 'Servo motor', mpn: 'SG90', cat: 'motors', ref: 'M',
+    id: 'servo', name: 'Servo motor', mpn: 'SG90', cat: 'motors', ref: 'M', power: '5V',
     full: 'SG90 9 g Micro Servo Motor (180°)', q: 'SG90 micro servo',
     board: null, art: 'servo', w: 6, h: 5, pins: ['GND', 'VCC', 'SIG'],
     tip: 'Turns to an exact angle. Brown = GND, red = 5 V, orange = signal.',
@@ -432,7 +442,7 @@ GFLUX.PARTS = [
     tip: 'Never wire a motor straight to the ESP32. Drive it through a motor driver.',
   },
   {
-    id: 'l298n', name: 'Motor driver', mpn: 'L298N', cat: 'motors', ref: 'U',
+    id: 'l298n', name: 'Motor driver', mpn: 'L298N', cat: 'motors', ref: 'U', noAuto: ['12V', '5V', 'OUT1', 'OUT2', 'OUT3', 'OUT4'],
     full: 'L298N Dual H-Bridge DC Motor Driver Module', q: 'L298N motor driver module',
     board: PCB.red, art: 'heatsink', w: 10, h: 9,
     pins: { left: ['OUT1', 'OUT2'], right: ['OUT3', 'OUT4'], bottom: ['12V', 'GND', '5V', 'ENA', 'IN1', 'IN2', 'IN3', 'IN4', 'ENB'] },
@@ -444,7 +454,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'stepper', name: 'Stepper motor', mpn: '28BYJ-48+ULN2003', cat: 'motors', ref: 'M',
+    id: 'stepper', name: 'Stepper motor', mpn: '28BYJ-48+ULN2003', cat: 'motors', ref: 'M', power: '5V',
     full: '28BYJ-48 5 V Stepper Motor with ULN2003 Driver Board', q: '28BYJ-48 stepper motor ULN2003',
     board: PCB.green, art: 'chip', w: 8, h: 6, pins: ['IN1', 'IN2', 'IN3', 'IN4', '+', '-'],
     tip: 'Moves in tiny precise steps. 2048 steps = one full turn.',
@@ -454,7 +464,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'relay', name: 'Relay', mpn: 'SRD-05VDC', cat: 'motors', ref: 'K',
+    id: 'relay', name: 'Relay', mpn: 'SRD-05VDC', cat: 'motors', ref: 'K', power: '5V', noAuto: ['NO', 'COM', 'NC'],
     full: '5 V 1-Channel Relay Module with Optocoupler', q: '5V 1 channel relay module',
     board: PCB.blue, art: 'relay', w: 9, h: 5, pins: { left: ['NO', 'COM', 'NC'], right: ['VCC', 'GND', 'IN'] },
     tip: 'A switch the ESP32 can flip to turn bigger things on and off. Mains voltage is NOT a beginner project.',
@@ -489,7 +499,7 @@ GFLUX.PARTS = [
     tip: 'Plays digital audio from the ESP32 on a small speaker.',
   },
   {
-    id: 'dfplayer', name: 'MP3 player', mpn: 'DFPlayer-Mini', cat: 'sound', ref: 'U',
+    id: 'dfplayer', name: 'MP3 player', mpn: 'DFPlayer-Mini', cat: 'sound', ref: 'U', power: '5V', noAuto: ['USB-', 'USB+', 'SPK_1', 'SPK_2'],
     full: 'DFPlayer Mini MP3 Player Module (microSD)', q: 'DFPlayer Mini MP3 module',
     board: PCB.blue, art: 'sd', w: 8, h: 9,
     pins: {
@@ -503,7 +513,7 @@ GFLUX.PARTS = [
     },
   },
   {
-    id: 'sdcard', name: 'SD card module', mpn: 'MicroSD-SPI', cat: 'sound', ref: 'U',
+    id: 'sdcard', name: 'SD card module', mpn: 'MicroSD-SPI', cat: 'sound', ref: 'U', power: '5V',
     full: 'MicroSD Card SPI Reader Module', q: 'micro SD card module SPI',
     board: PCB.blue, art: 'sd', w: 7, h: 9, pins: ['GND', 'VCC', 'MISO', 'MOSI', 'SCK', 'CS'],
     tip: 'Save data logs or read files.',
@@ -553,7 +563,7 @@ GFLUX.PARTS = [
 /** Pin role used for wire colours and KiCad pin types. */
 GFLUX.pinKind = function (name) {
   const n = String(name).toUpperCase();
-  if (/^(GND|G|-|M-|B-|IN-|OUT-|USB-)$/.test(n) || n === 'GND') return 'gnd';
+  if (/^(GND|-|M-|B-|IN-|OUT-|USB-)$/.test(n)) return 'gnd'; // not 'G': that's the RGB LED's green pin
   if (/^(3V3|3\.3V)$/.test(n)) return 'v3';
   if (/^(VCC|VIN|5V|\+5V|12V|\+|M\+|B\+|IN\+|OUT\+|DC\+)$/.test(n)) return 'v5';
   if (n === 'SDA') return 'sda';

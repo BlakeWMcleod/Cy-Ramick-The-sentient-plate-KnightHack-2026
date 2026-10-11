@@ -84,6 +84,9 @@
     const usedGpio = new Map(); // gpio -> [ref.pin]
     const wiring = [], todos = [], notes = [], blocks = [];
     let serialPorts = ['Serial2', 'Serial1'];
+    // The ESP32-C3 has no Serial2: its free hardware UARTs are Serial1 and Serial0.
+    const board = ordered.find((p) => G.getPart(p.type).controller);
+    if (board && board.type === 'esp32c3') serialPorts = ['Serial1', 'Serial0'];
 
     for (const inst of ordered) {
       const def = G.getPart(inst.type);
@@ -155,7 +158,7 @@
         const port = serialPorts.shift() || 'Serial1';
         if (port !== 'Serial2') {
           for (const k of ['glob', 'setup', 'loop']) code[k] = code[k].replace(/\bSerial2\b/g, port);
-          notes.push(`${ref} uses ${port} because Serial2 is already taken.`);
+          notes.push(board && board.type === 'esp32c3' ? `${ref} uses ${port} (the ESP32-C3 has no Serial2).` : `${ref} uses ${port} because Serial2 is already taken.`);
         }
       }
       for (const m of missing) todos.push(m === 'a signal pin' ? `${ref} (${def.name}): wire it to a GPIO pin` : `${ref} (${def.name}): wire ${m}` + ((m === 'SDA' || m === 'SCL') ? ` to GPIO${i2c[m]}` : ' to a GPIO pin'));
