@@ -247,9 +247,8 @@ GFLUX.art = (function () {
     const signals = def.pins.filter((p) => !(def.rails && def.rails[p.name]) && p.kind !== 'gnd' && p.kind !== 'v3' && p.kind !== 'v5');
     return RAINBOW[signals.indexOf(pin) % RAINBOW.length];
   }
-  const KEY_HEX = { R: '#e53935', O: '#fb8c00', Y: '#fdd835', G: '#43a047', B: '#1e88e5', I: '#3f51b5', V: '#8e24aa', K: '#1c1c1c', W: '#f4f4f4' };
 
-  /** Header strip + pins (gold, or rainbow-coded on controller boards), plus silkscreen labels. */
+  /** Header strip + gold pins, plus silkscreen labels. */
   function pinsAndLabels(def, onBoard) {
     let s = '';
     const bySide = { left: [], right: [], top: [], bottom: [] };
@@ -267,10 +266,7 @@ GFLUX.art = (function () {
       const turn = !vertical && longest > 3;
       for (const p of list) {
         const x = p.x * G, y = p.y * G;
-        if (onBoard && def.controller) {
-          const key = pinColor(def, p.num);
-          s += r(x - 5, y - 5, 10, 10, KEY_HEX[key], key === 'K' ? 'stroke="#9a9a9a" stroke-width="1.2"' : '') + r(x - 2, y - 2, 4, 4, GOLD);
-        } else s += onBoard ? r(x - 4, y - 4, 8, 8, GOLD, 'rx="1.2"') : c(x, y, 4, '#c8c8c8', 'stroke="#888"');
+        s += onBoard ? r(x - 4, y - 4, 8, 8, GOLD, 'rx="1.2"') : c(x, y, 4, '#c8c8c8', 'stroke="#888"');
         if (!onBoard && def.pins.length <= 2) continue;
         const fill = onBoard ? 'rgba(255,255,255,.92)' : 'var(--ink-2)';
         const fs = 7.5;

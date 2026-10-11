@@ -27,9 +27,14 @@
   const undoStack = [], redoStack = [];
   const artCache = new Map();
 
-  const ANIM_DEFAULTS = { on: true, dim: true, speed: 1, gap: 14, size: 2.5, style: 'dash', power: true, ground: true, signal: true };
+  const ANIM_DEFAULTS = { v: 2, on: true, dim: true, speed: 1, gap: 14, size: 2.5, style: 'pulse', power: true, ground: true, signal: true };
   let anim = Object.assign({}, ANIM_DEFAULTS);
-  try { Object.assign(anim, JSON.parse(store.get('gflux.anim') || '{}')); } catch (e) { /* keep defaults */ }
+  try {
+    const saved = JSON.parse(store.get('gflux.anim') || '{}');
+    if (saved.v === 2) Object.assign(anim, saved); // older settings predate the glowing pulses
+  } catch (e) { /* keep defaults */ }
+  let bgColor = store.get('gflux.bg') || '#ffffff';
+  let warpAmt = store.get('gflux.warp') != null ? +store.get('gflux.warp') : 0.6;
   let autoResistor = store.get('gflux.autoResistor') !== 'off';
 
   const svg = $('#canvas');
@@ -293,13 +298,29 @@
 
   const hexOf = (c) => (c && c[0] === '#' ? c : GFLUX.colorHex(c));
 
-  /** Colour for a new wire in Auto mode. Wires on the ESP32 take the colour
-   *  printed on its pin (ROYGBIV for signals, red power, black ground). */
+  const RAINBOW = ['R', 'O', 'Y', 'G', 'B', 'I', 'V'];
+
+  /** Is this wire end a signal (not power/ground) pin on a controller board? */
+  function isBoardSignal(end) {
+    if (!GFLUX.isPinEnd(end)) return false;
+    const inst = instOf(end.part);
+    if (!inst || !GFLUX.getPart(inst.type).controller) return false;
+    const def = GFLUX.getPart(inst.type), pin = GFLUX.pinByNum(inst.type, end.pin);
+    return pin.kind === 'sig' && !(def.rails && def.rails[pin.name]);
+  }
+
+  /** Colour for a new wire in Auto mode. Wires leaving the ESP32 go through
+   *  the rainbow (ROYGBIV) one after another; power is red, ground black. */
   function autoColor(a, b) {
     for (const ref of [a, b]) {
       if (!ref || ref.pt) continue;
       const def = GFLUX.getPart(instOf(ref.uid).type);
-      if (def.controller) return GFLUX.art.pinColor(def, ref.pin);
+      if (!def.controller) continue;
+      const pin = GFLUX.pinByNum(def.id, ref.pin);
+      if (pin.kind === 'gnd') return 'K';
+      if ((def.rails && def.rails[pin.name]) || pin.kind === 'v3' || pin.kind === 'v5') return 'R';
+      const out = state.wires.filter((w) => isBoardSignal(w.a) || isBoardSignal(w.b)).length;
+      return RAINBOW[out % RAINBOW.length];
     }
     const roles = [a, b].filter((r) => r && !r.pt).map((r) => ({ role: GFLUX.pinRole(instOf(r.uid), r.pin), name: GFLUX.pinByNum(instOf(r.uid).type, r.pin).name }));
     if (roles.some((r) => r.role.rail === 'GND' || (r.role.kind === 'gnd'))) return 'K';
@@ -314,13 +335,30 @@
   const FLOW_COLOR = { power: '#ffe14d', ground: '#ffffff', signal: '#5ee1ff' };
   const FLOW_SPEED = { power: 46, ground: 30, signal: 36 }; // px per second at 1x
 
+  const pathLen = (pts) => pts.reduce((n, p, i) => (i ? n + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) * G : 0), 0);
+
+  /** Glowing white pulses (radial gradient) travelling the way current flows. */
+  function pulseMarkup(d, len, kind) {
+    const spacing = Math.max(24, anim.gap * 4), rad = anim.size * 2.8;
+    const dur = Math.max(0.4, len / (FLOW_SPEED[kind] * anim.speed));
+    const n = Math.min(14, Math.max(1, Math.round(len / spacing)));
+    let s = '';
+    for (let i = 0; i < n; i++) {
+      const begin = (-dur * i / n).toFixed(3);
+      s += `<circle class="pulse" r="${rad}" fill="url(#gx-pulse)">` +
+        `<animate attributeName="r" values="${rad * 0.75};${rad * 1.2};${rad * 0.75}" dur="1.1s" begin="${begin}s" repeatCount="indefinite"/>` +
+        `<animateMotion dur="${dur.toFixed(3)}s" begin="${begin}s" repeatCount="indefinite" path="${d}"/></circle>`;
+    }
+    return s;
+  }
+
   /** Moving particles along a wire, pointing the way current flows. Uses SMIL
    *  so it always runs, independent of the OS "reduce motion" CSS setting. */
-  function flowMarkup(d, kind) {
+  function flowMarkup(d, kind, pts) {
+    if (anim.style === 'pulse') return pulseMarkup(d, pathLen(pts), kind);
     const gap = +anim.gap, size = +anim.size;
     let dash = size * 2.4, cap = 'butt', width = size;
     if (anim.style === 'dot') { dash = 0.01; cap = 'round'; width = size * 1.8; }
-    if (anim.style === 'pulse') { dash = gap * 0.9; cap = 'round'; }
     const period = dash + gap;
     const dur = (period / (FLOW_SPEED[kind] * anim.speed)).toFixed(3);
     const move = `<animate attributeName="stroke-dashoffset" from="0" to="${-period}" dur="${dur}s" repeatCount="indefinite"/>`;
@@ -350,7 +388,6 @@
     const flows = anim.on ? GFLUX.rules.flow(state) : new Map();
     $('#world1').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
     $('#world2').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
-    $('#gridPat').setAttribute('patternTransform', `translate(${view.x} ${view.y}) scale(${view.k})`);
 
     let parts = '', labels = '', pins = '', wires = '', flow = '';
     const wiring = drag && drag.mode === 'wire';
@@ -389,7 +426,10 @@
         `<path class="w-glow" d="${d}"/><path class="w-edge" d="${d}"/><path class="w-core" d="${d}" stroke="${hex}"/>${ends}` +
         `<path class="w-hit" d="${d}"/></g>`;
       const f = flows.get(w.id);
-      if (f && f.dir && anim[f.kind]) flow += flowMarkup(pathD(f.dir > 0 ? pts : pts.slice().reverse()), f.kind);
+      if (f && f.dir && anim[f.kind]) {
+        const fp = f.dir > 0 ? pts : pts.slice().reverse();
+        flow += flowMarkup(pathD(fp), f.kind, fp);
+      }
     }
     for (const pt of looseEnds.values()) {
       wires += `<circle class="w-free" cx="${pt.x * G}" cy="${pt.y * G}" r="4.5"/>`;
@@ -403,7 +443,7 @@
     renderPreview();
     svg.classList.toggle('wiring', !!wiring);
     svg.classList.toggle('dim-on', !!anim.dim);
-    if (drag) setGrid(true);
+    requestGrid();
     $('#legend').hidden = !wiring;
     $('#hint').hidden = !!wiring;
     $('#stats').textContent = `${state.parts.length} parts · ${state.wires.length} wires · ${Math.round(view.k * 100)}%`;
@@ -415,7 +455,7 @@
     const tag = labelSpot(inst);
     const w = tag.w, nameW = w - (def.controller ? 0 : TAG_BTN);
     let s = `<g class="part-label cat-${def.cat}" data-uid="${inst.uid}" data-type="${esc(inst.type)}" transform="translate(${tag.cx * G} ${tag.cy * G})">` +
-      `<rect class="tag" x="${-w / 2}" y="-10" width="${w}" height="20"/>` +
+      `<rect class="tag" x="${-w / 2}" y="-10" width="${w}" height="20" rx="10"/>` +
       `<rect class="name-hit" x="${-w / 2}" y="-10" width="${nameW}" height="20"/>` +
       `<text x="${-w / 2 + nameW / 2}" y="4.5" text-anchor="middle">${esc(def.name)}</text>`;
     if (!def.controller) {
@@ -423,7 +463,7 @@
       if (info) {
         // Lightning-bolt button: wire this part to the ESP32 automatically.
         s += `<g class="autowire${info.done ? ' done' : ''}" data-uid="${inst.uid}" transform="translate(${w / 2 - TAG_BTN + 1} -9)" role="button" aria-label="Auto-wire ${esc(def.name)}">` +
-          `<rect width="${TAG_BTN - 2}" height="18"/><path d="M12.5 2 6 10.5h4.5L9 16l7-8.5h-4.5z"/></g>`;
+          `<rect x="1" y="1" width="${TAG_BTN - 4}" height="16" rx="8"/><path d="M12.5 2 6 10.5h4.5L9 16l7-8.5h-4.5z"/></g>`;
       }
     }
     return s + '</g>';
@@ -445,12 +485,80 @@
       drag.via.map((v) => `<circle class="pv-via" cx="${v.x * G}" cy="${v.y * G}" r="4"/>`).join('');
   }
 
-  // The grid fades in only while you hover or move something.
-  let gridTimer = null;
-  function setGrid(on) {
-    clearTimeout(gridTimer);
-    if (on) svg.classList.add('grid-on');
-    else gridTimer = setTimeout(() => svg.classList.remove('grid-on'), 120);
+  // --------------------------------------------------------- stretchy grid
+  // Drawn on a canvas under the SVG; lines bulge away from the mouse.
+  const gridCv = $('#gridCanvas'), gctx = gridCv.getContext('2d');
+  const warp = { mx: -1e4, my: -1e4, tx: -1e4, ty: -1e4, s: 0, ts: 0 };
+  let gridRaf = 0;
+  const requestGrid = () => { if (!gridRaf) gridRaf = requestAnimationFrame(drawGrid); };
+
+  function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+
+  function drawGrid() {
+    gridRaf = 0;
+    const dpr = window.devicePixelRatio || 1, w = gridCv.clientWidth, h = gridCv.clientHeight;
+    if (gridCv.width !== Math.round(w * dpr) || gridCv.height !== Math.round(h * dpr)) {
+      gridCv.width = Math.round(w * dpr); gridCv.height = Math.round(h * dpr);
+    }
+    gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gctx.clearRect(0, 0, w, h);
+    // Ease the bulge toward the mouse so it feels springy.
+    if (warp.s < 0.01 && warp.ts > 0) { warp.mx = warp.tx; warp.my = warp.ty; }
+    warp.mx += (warp.tx - warp.mx) * 0.3;
+    warp.my += (warp.ty - warp.my) * 0.3;
+    warp.s += (warp.ts - warp.s) * 0.18;
+    let sp = G * view.k;
+    while (sp < 10) sp *= 2;
+    const ox = ((view.x % sp) + sp) % sp, oy = ((view.y % sp) + sp) % sp;
+    const R = 140, K = warpAmt * 0.55 * warp.s;
+    const bend = K > 0.002;
+    const disp = (x, y) => {
+      const dx = x - warp.mx, dy = y - warp.my;
+      const f = K * Math.exp(-(dx * dx + dy * dy) / (R * R));
+      return [x + dx * f, y + dy * f];
+    };
+    gctx.lineWidth = 1;
+    gctx.strokeStyle = luminance(bgColor) > 0.4 ? 'rgba(25, 30, 50, 0.11)' : 'rgba(255, 255, 255, 0.11)';
+    gctx.beginPath();
+    for (let x = ox; x <= w; x += sp) {
+      if (!bend || Math.abs(x - warp.mx) > R * 2.6) { gctx.moveTo(x + 0.5, 0); gctx.lineTo(x + 0.5, h); continue; }
+      for (let y = 0; y <= h + 8; y += 8) { const [px, py] = disp(x, y); y ? gctx.lineTo(px + 0.5, py) : gctx.moveTo(px + 0.5, py); }
+    }
+    for (let y = oy; y <= h; y += sp) {
+      if (!bend || Math.abs(y - warp.my) > R * 2.6) { gctx.moveTo(0, y + 0.5); gctx.lineTo(w, y + 0.5); continue; }
+      for (let x = 0; x <= w + 8; x += 8) { const [px, py] = disp(x, y); x ? gctx.lineTo(px, py + 0.5) : gctx.moveTo(px, py + 0.5); }
+    }
+    gctx.stroke();
+    if (Math.abs(warp.tx - warp.mx) > 0.3 || Math.abs(warp.ty - warp.my) > 0.3 || Math.abs(warp.ts - warp.s) > 0.005) requestGrid();
+  }
+
+  // ------------------------------------------------ top bar follows the hover
+  const CAT_HEX = () => Object.fromEntries(GFLUX.CATEGORIES.map((c) => [c.id, c.color === 'Y' ? '#e6be00' : c.color === 'W' ? '#7d7d86' : hexOf(c.color)]));
+  let hoverHex = null;
+  /** Tint the top bar with whatever is under the mouse on the grid. */
+  function hoverTint(el) {
+    let hex = null;
+    const pinEl = el.closest && el.closest('.pin');
+    const wireEl = el.closest && el.closest('.wire');
+    const partEl = el.closest && el.closest('.part, .part-label');
+    if (pinEl && !pinEl.dataset.pt) {
+      const inst = instOf(pinEl.dataset.uid), pin = GFLUX.pinByNum(inst.type, pinEl.dataset.pin);
+      const role = GFLUX.pinRole(inst, pin.num);
+      hex = role.rail === 'GND' || pin.kind === 'gnd' ? '#1c1c1c' : role.rail || pin.kind === 'v3' || pin.kind === 'v5' ? hexOf('R') : CAT_HEX()[GFLUX.getPart(inst.type).cat];
+    } else if (wireEl) {
+      const w = state.wires.find((x) => x.id === wireEl.dataset.wid);
+      if (w) hex = hexOf(w.color);
+    } else if (partEl) {
+      const inst = instOf(partEl.dataset.uid);
+      if (inst) hex = CAT_HEX()[GFLUX.getPart(inst.type).cat];
+    }
+    if (hex === hoverHex) return;
+    hoverHex = hex;
+    tint(null);
   }
 
   // -------------------------------------------------------------- library
@@ -669,7 +777,6 @@
   function endWire() {
     drag = null;
     pinTip.hidden = true;
-    setGrid(false);
     changed();
   }
 
@@ -715,8 +822,8 @@
       const label = e.target.closest && e.target.closest('.name-hit');
       if (label) showPartTip(label.parentNode.dataset.type, label); else if (!tip.matches(':hover')) hideTipSoon();
       const ref = refFromEl(e.target);
-      if (ref) showPinTip(refLabel(ref), 'none', e.clientX, e.clientY); else pinTip.hidden = true;
-      setGrid(!!(e.target.closest && e.target.closest('.part, .pin, .wire, .part-label')));
+      if (ref && !ref.pt) showPinTip(refLabel(ref), 'none', e.clientX, e.clientY); else pinTip.hidden = true;
+      hoverTint(e.target);
       return;
     }
     const world = screenToWorld(e.clientX, e.clientY);
@@ -737,13 +844,11 @@
       drag.cursor = { x: Math.round(world.x), y: Math.round(world.y) };
       const over = refFromEl(document.elementFromPoint(e.clientX, e.clientY));
       drag.hover = over && !sameRef(over, drag.from) ? over : null;
-      if (drag.hover) {
+      if (drag.hover && !drag.hover.pt) {
         const res = drag.checks.get(refKey(drag.hover)) || { level: 'ok', reason: 'Connects' };
         const icon = { good: '✓', ok: '•', caution: '!', blocked: '✕' }[res.level];
-        const name = drag.hover.pt ? 'Loose end' : GFLUX.pinByNum(instOf(drag.hover.uid).type, drag.hover.pin).name;
-        showPinTip(`${icon} ${name}: ${res.reason}`, res.level, e.clientX, e.clientY);
-      } else if (drag.moved) showPinTip('Let go here for a loose wire end', 'none', e.clientX, e.clientY);
-      else pinTip.hidden = true;
+        showPinTip(`${icon} ${GFLUX.pinByNum(instOf(drag.hover.uid).type, drag.hover.pin).name}: ${res.reason}`, res.level, e.clientX, e.clientY);
+      } else pinTip.hidden = true;
       renderPreview();
     }
   });
@@ -763,11 +868,18 @@
     if (drag.mode === 'pan' && !drag.moved) sel = null;
     if (drag.mode === 'part' && drag.moved) store.set('gflux.autosave', JSON.stringify(state));
     drag = null;
-    setGrid(false);
     render();
   });
 
-  svg.addEventListener('pointerleave', () => { if (!drag) { pinTip.hidden = true; hideTipSoon(); setGrid(false); } });
+  svg.addEventListener('pointerleave', () => {
+    warp.ts = 0; requestGrid();
+    if (!drag) { pinTip.hidden = true; hideTipSoon(); hoverHex = null; tint(null); }
+  });
+  svg.addEventListener('pointermove', (e) => {
+    const r = svg.getBoundingClientRect();
+    warp.tx = e.clientX - r.left; warp.ty = e.clientY - r.top; warp.ts = 1;
+    requestGrid();
+  });
 
   svg.addEventListener('wheel', (e) => {
     e.preventDefault();
@@ -842,9 +954,16 @@
     if (!state.wires.length) return;
     snapshot();
     const ref = (end) => (GFLUX.isPinEnd(end) ? { uid: end.part, pin: end.pin } : null);
-    for (const w of state.wires) w.color = autoColor(ref(w.a), ref(w.b));
+    // Board signal wires: a clean rainbow down the headers, in pin order.
+    const boardEnd = (w) => (isBoardSignal(w.a) ? w.a : isBoardSignal(w.b) ? w.b : null);
+    const out = state.wires.filter(boardEnd).sort((p, q) => {
+      const a = endPos(boardEnd(p)), b = endPos(boardEnd(q));
+      return a.x - b.x || a.y - b.y;
+    });
+    out.forEach((w, i) => { w.color = RAINBOW[i % RAINBOW.length]; });
+    for (const w of state.wires) if (!boardEnd(w)) w.color = autoColor(ref(w.a), ref(w.b));
     changed();
-    toast('Wires recoloured: ESP32 pin colours, black ground, red power.');
+    toast('Wires recoloured: a rainbow out of the ESP32, black ground, red power.');
   }
 
   document.addEventListener('keydown', (e) => {
@@ -852,6 +971,7 @@
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveProject(); return; }
     if (e.key === 'Escape' && openTab) { closeMenus(); return; }
+    if (e.key === 'Escape' && !fin.hidden) { closeFinalize(); return; }
     if (typing) return;
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? restore(redoStack, undoStack) : restore(undoStack, redoStack); return; }
     if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); restore(redoStack, undoStack); return; }
@@ -1084,15 +1204,87 @@
     }
   }
 
+  // --------------------------------------------------------------- finalize
+
+  const fin = $('#finalize');
+  function closeFinalize() { fin.hidden = true; fin.innerHTML = ''; }
+
+  /** White screen with every problem in a few words, then back out or finalize. */
+  function openFinalize() {
+    closeMenus();
+    tip.hidden = true;
+    const issues = GFLUX.check.run(state);
+    const errors = issues.filter((i) => i.level === 'error').length, warns = issues.length - errors;
+    const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+    fin.innerHTML = `<div class="fin-card">
+      <h2 class="fin-title">Finalize ${esc(state.name || 'my-circuit')}</h2>
+      ${issues.length ? `<p class="fin-sub">${[errors && plural(errors, 'problem'), warns && plural(warns, 'warning')].filter(Boolean).join(' · ')}</p>
+      <ul class="fin-list">${issues.map((i) => `<li class="${i.level}"${i.uid ? ` data-uid="${i.uid}"` : ''}>${esc(i.text)}</li>`).join('')}</ul>`
+      : '<p class="fin-ok">No problems found</p>'}
+      <div class="fin-actions">
+        <button class="btn" data-fin="back">Back out</button>
+        <button class="btn primary fin-go" data-fin="go">${errors ? 'Finalize anyway' : 'Finalize'}</button>
+      </div></div>`;
+    fin.hidden = false;
+    $('[data-fin="back"]', fin).focus();
+  }
+
+  async function finalize() {
+    fin.innerHTML = '<div class="fin-card"><h2 class="fin-title">Finalizing…</h2><p class="fin-sub">Building your KiCad files</p></div>';
+    const base = fileBase();
+    const files = { name: base, sch: GFLUX.kicad.schematic(state), pcb: GFLUX.kicad.pcb(state), pro: GFLUX.kicad.project(state), ino: GFLUX.codegen ? GFLUX.codegen.sketch(state) : undefined };
+    const downloadZip = () => download(base + '-kicad.zip', GFLUX.kicad.zip([
+      { name: `${base}/${base}.kicad_pro`, data: files.pro }, { name: `${base}/${base}.kicad_sch`, data: files.sch },
+      { name: `${base}/${base}.kicad_pcb`, data: files.pcb }].concat(files.ino ? [{ name: `${base}/${base}/${base}.ino`, data: files.ino }] : [])));
+    let line;
+    if (appBase) {
+      try {
+        const { status, data } = await api('/api/kicad/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(files) });
+        if (status >= 400) throw new Error(data.error || 'HTTP ' + status);
+        line = data.opened.length
+          ? `Opened the ${data.opened.map((o) => (o === 'pcb' ? 'PCB' : o)).join(' and ')} in KiCad. Saved in <code>${esc(data.folder)}</code>`
+          : `Saved in <code>${esc(data.folder)}</code>. ${esc(data.problems.join('; '))}. Use the KiCad menu to find or install KiCad.`;
+      } catch (e) {
+        downloadZip();
+        line = `The GFLUX app couldn't open KiCad (${esc(e.message)}), so the KiCad project was downloaded instead.`;
+      }
+    } else {
+      downloadZip();
+      line = `Downloaded the KiCad project. Run GFLUX through the <a href="${RELEASE}" target="_blank" rel="noopener">GFLUX app</a> to open it in KiCad automatically.`;
+    }
+    const shop = GFLUX.check.shoppingList(state);
+    fin.innerHTML = `<div class="fin-card">
+      <h2 class="fin-title">Finalized</h2>
+      <p class="fin-kicad">${line}</p>
+      <h3>Shopping list</h3>
+      <ul class="fin-shop">${shop.map((r) => `<li><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">
+        <span class="qty">${r.qty}×</span><span class="nm">${esc(r.name)}</span><span class="buy">Amazon ↗</span><span class="full">${esc(r.full)}</span></a></li>`).join('')}</ul>
+      <div class="fin-actions"><button class="btn primary" data-fin="back">Back to editor</button></div></div>`;
+  }
+
+  fin.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-fin]');
+    if (b && b.dataset.fin === 'back') closeFinalize();
+    if (b && b.dataset.fin === 'go') finalize();
+    const li = e.target.closest('.fin-list li[data-uid]');
+    if (li) {
+      // Jump to the part with the problem.
+      closeFinalize();
+      const inst = instOf(li.dataset.uid);
+      if (inst) { sel = { kind: 'part', id: inst.uid }; ensureVisible(inst); render(); toast(li.textContent); }
+    }
+  });
+
   // ------------------------------------------------------------------ menus
 
   let openTab = null;
   const topbar = $('#topbar');
   function tint(tab) {
     const t = tab || openTab;
-    if (!t) { topbar.classList.remove('tinted'); topbar.style.removeProperty('--bar'); return; }
+    const hex = t ? getComputedStyle(t).getPropertyValue('--w').trim() : hoverHex;
+    if (!hex) { topbar.classList.remove('tinted'); topbar.style.removeProperty('--bar'); return; }
     topbar.classList.add('tinted');
-    topbar.style.setProperty('--bar', getComputedStyle(t).getPropertyValue('--w').trim());
+    topbar.style.setProperty('--bar', hex);
   }
   function openMenu(tab) {
     if (openTab && openTab !== tab) closeMenus();
@@ -1128,6 +1320,7 @@
     locate: () => kicadAction('locate'),
     install: () => kicadAction('install'),
     recolor: recolorAll,
+    finalize: openFinalize,
   };
 
   function bindMenus() {
@@ -1207,6 +1400,46 @@
     syncColor();
   }
 
+  const BACKGROUNDS = [['#ffffff', 'White'], ['#f7f4ec', 'Paper'], ['#eaf6ee', 'Mint'], ['#e9f2fd', 'Sky'],
+    ['#f1ecfb', 'Lilac'], ['#fdeef0', 'Blush'], ['#2b303b', 'Slate'], ['#15171d', 'Night']];
+
+  function setBg(c) {
+    bgColor = c;
+    store.set('gflux.bg', c);
+    document.documentElement.style.setProperty('--bg', c);
+    $('#bgChip').style.setProperty('--chip', c);
+    $$('#bgSwatches button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.bg === c)));
+    requestGrid();
+  }
+
+  function bindBackground() {
+    $('#bgSwatches').innerHTML = BACKGROUNDS.map(([hex, name]) =>
+      `<button role="radio" data-bg="${hex}" style="--sw:${hex};--swt:${luminance(hex) > 0.4 ? '#444' : '#ddd'}">${name}</button>`).join('');
+    $('#bgSwatches').addEventListener('click', (e) => { const b = e.target.closest('[data-bg]'); if (b) setBg(b.dataset.bg); });
+    const custom = $('#customBg');
+    custom.value = bgColor;
+    custom.addEventListener('input', () => setBg(custom.value));
+    const amt = $('#warpAmt'), out = $('#warpOut');
+    amt.value = warpAmt;
+    out.textContent = Math.round(warpAmt * 100) + '%';
+    amt.addEventListener('input', () => { warpAmt = +amt.value; store.set('gflux.warp', String(warpAmt)); out.textContent = Math.round(warpAmt * 100) + '%'; });
+    setBg(bgColor);
+  }
+
+  // -------------------------------------------------- library scroll colour
+  /** The library panel slides through the rainbow as you scroll it. */
+  function libScrollTint() {
+    const list = $('#libList');
+    const max = list.scrollHeight - list.clientHeight;
+    const f = max > 0 ? list.scrollTop / max : 0;
+    const stops = RAINBOW.map((k) => GFLUX.colorHex(k));
+    const pos = f * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(pos)), t = pos - i;
+    const mix = (a, b) => Math.round(a + (b - a) * t);
+    const A = parseInt(stops[i].slice(1), 16), B = parseInt(stops[i + 1].slice(1), 16);
+    const rgb = [16, 8, 0].map((sh) => mix((A >> sh) & 255, (B >> sh) & 255));
+    $('#drawer').style.setProperty('--lib', `rgb(${rgb.join(',')})`);
+  }
+
   // ---------------------------------------------------------------- drawer
 
   function openDrawer(tab) {
@@ -1242,6 +1475,8 @@
     bindMenus();
     bindAnimation();
     bindColor();
+    bindBackground();
+    $('#libList').addEventListener('scroll', libScrollTint, { passive: true });
 
     $$('#rail [data-tab]').forEach((b) => b.addEventListener('click', () => openDrawer(b.dataset.tab)));
     $('#drawerClose').onclick = () => openDrawer($('#drawer').dataset.tab);
@@ -1290,7 +1525,7 @@
       addPart(def.id);
     });
 
-    window.addEventListener('resize', render);
+    window.addEventListener('resize', () => { render(); requestGrid(); });
   }
 
   // ------------------------------------------------------------------ boot
@@ -1299,7 +1534,8 @@
     // Reveal the UI only once the stylesheet is really there (see index.html).
     if (getComputedStyle(document.documentElement).getPropertyValue('--gx-css').trim() !== '1') return;
     document.documentElement.classList.add('gx-ready');
-    $('#defs').innerHTML = GFLUX.art.DEFS + $('#defs').innerHTML;
+    $('#defs').innerHTML = GFLUX.art.DEFS + $('#defs').innerHTML +
+      '<radialGradient id="gx-pulse"><stop offset="0" stop-color="#fff" stop-opacity="1"/><stop offset=".3" stop-color="#fff" stop-opacity=".9"/><stop offset=".65" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>';
     bindUI();
     let saved = null;
     try { saved = JSON.parse(store.get('gflux.autosave') || 'null'); } catch (e) { saved = null; }

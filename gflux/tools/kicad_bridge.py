@@ -919,6 +919,84 @@ def start_install(open_page=True):
 
 # ------------------------------------------------------------ HTTP
 
+# ------------------------------------------------- finalize: open in KiCad
+
+def documents_dir():
+    """Where finalized projects are saved: Documents/GFLUX/<name>."""
+    override = os.environ.get('GFLUX_PROJECTS')
+    if override:
+        return override
+    home = os.path.expanduser('~')
+    docs = os.path.join(os.environ.get('USERPROFILE', home), 'Documents') if sys.platform == 'win32' else os.path.join(home, 'Documents')
+    return os.path.join(docs if os.path.isdir(docs) else home, 'GFLUX')
+
+
+def editor_command(tool, path, cli=None, platform=None):
+    """argv that opens `path` in KiCad's schematic ('eeschema') or PCB ('pcbnew') editor."""
+    platform = platform or sys.platform
+    cli = cli if cli is not None else find_cli()
+    if not cli:
+        return None
+    if isinstance(cli, (list, tuple)):  # flatpak
+        return [a if not a.startswith('--command=') else '--command=' + tool for a in cli] + [path]
+    bindir = os.path.dirname(cli)
+    if platform == 'darwin':
+        # .../KiCad.app/Contents/MacOS/kicad-cli -> .../KiCad.app/Contents/Applications/Eeschema.app
+        app = os.path.join(os.path.dirname(bindir), 'Applications', tool.capitalize() + '.app')
+        return ['open', '-a', app, path] if os.path.isdir(app) else ['open', path]
+    exe = os.path.join(bindir, tool + ('.exe' if platform == 'win32' else ''))
+    if os.path.isfile(exe):
+        return [exe, path]
+    found = shutil.which(tool)
+    return [found, path] if found else None
+
+
+def launch(argv):
+    """Start a program without waiting for it or tying it to this console."""
+    if os.environ.get('GFLUX_NO_LAUNCH'):  # tests
+        return
+    kw = {'stdin': subprocess.DEVNULL, 'stdout': subprocess.DEVNULL, 'stderr': subprocess.DEVNULL}
+    if sys.platform == 'win32':
+        kw['creationflags'] = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+    else:
+        kw['start_new_session'] = True
+    subprocess.Popen(argv, **kw)
+
+
+def open_in_kicad(data):
+    """Save the project under Documents/GFLUX/<name> and open its schematic and PCB in KiCad."""
+    name = safe_name(data.get('name'))
+    for key in ('sch', 'pcb'):
+        if not isinstance(data.get(key), str) or not data[key].strip():
+            raise ValueError('missing %s' % key)
+    folder = os.path.join(documents_dir(), name)
+    os.makedirs(folder, exist_ok=True)
+    files = {name + '.kicad_sch': data['sch'], name + '.kicad_pcb': data['pcb']}
+    if isinstance(data.get('pro'), str):
+        files[name + '.kicad_pro'] = data['pro']
+    if isinstance(data.get('ino'), str):
+        files[os.path.join(name, name + '.ino')] = data['ino']  # Arduino wants a matching folder
+    for rel, text in files.items():
+        path = os.path.join(folder, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        write(path, text)
+    opened, problems = [], []
+    if not find_cli():
+        problems.append(detect_kicad().get('problem') or 'KiCad is not installed')
+    else:
+        for tool, rel in (('eeschema', name + '.kicad_sch'), ('pcbnew', name + '.kicad_pcb')):
+            argv = editor_command(tool, os.path.join(folder, rel))
+            if not argv:
+                problems.append('could not find the KiCad %s editor' % ('schematic' if tool == 'eeschema' else 'PCB'))
+                continue
+            try:
+                launch(argv)
+                opened.append('schematic' if tool == 'eeschema' else 'pcb')
+            except OSError as e:
+                problems.append(str(e))
+    return {'ok': not problems, 'folder': folder, 'files': sorted(files), 'opened': opened, 'problems': problems}
+
+
 def health(launcher=False):
     """What the web page shows. ok/bridge/version keep their old meaning."""
     d = detect_kicad()
@@ -1006,7 +1084,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         route = self.path.split('?')[0].rstrip('/')
-        if route in ('/api/kicad/install', '/api/kicad/recheck', '/api/kicad/locate'):
+        if route in ('/api/kicad/install', '/api/kicad/recheck', '/api/kicad/locate', '/api/kicad/open'):
             # Only GFLUX's own page may install, re-scan or open a picker, never another website.
             if not self.same_origin():
                 return self.send_json(403, {'ok': False, 'error': 'this request must come from the GFLUX page itself'})
@@ -1015,6 +1093,13 @@ class Handler(SimpleHTTPRequestHandler):
             if route == '/api/kicad/recheck':
                 refresh_kicad()
                 return self.send_json(200, self.health())
+            if route == '/api/kicad/open':
+                try:
+                    return self.send_json(200, open_in_kicad(self.read_json()))
+                except (ValueError, UnicodeDecodeError) as e:
+                    return self.send_json(400, {'ok': False, 'error': str(e)})
+                except OSError as e:
+                    return self.send_json(500, {'ok': False, 'error': 'could not save the project: %s' % e})
             return self.locate()
         jobs = {'/api/kicad/schematic': export_schematic, '/api/kicad/pcb': export_pcb}
         if route not in jobs:

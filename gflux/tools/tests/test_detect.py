@@ -450,6 +450,74 @@ def make_schematic():
 
 
 @unittest.skipUnless(os.environ.get('GFLUX_E2E', '1') != '0' and POSIX, 'end-to-end export disabled')
+@unittest.skipUnless(POSIX, 'fake kicad-cli scripts need a POSIX shell')
+class OpenInKicad(unittest.TestCase):
+    """POST /api/kicad/open saves the project and launches both editors."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix='gflux-open-')
+        self.bin = os.path.join(self.tmp, 'bin')
+        os.makedirs(self.bin)
+        for tool in ('kicad-cli', 'eeschema', 'pcbnew'):
+            path = os.path.join(self.bin, tool)
+            with open(path, 'w') as f:
+                f.write('#!/bin/sh\necho 9.0.1\n')
+            os.chmod(path, 0o755)
+        self.env = mock.patch.dict(os.environ, {'GFLUX_PROJECTS': os.path.join(self.tmp, 'projects'), 'GFLUX_NO_LAUNCH': '1'})
+        self.env.start()
+        self.quiet = mock.patch.object(kb.Handler, 'log_message', lambda *a: None)
+        self.quiet.start()
+        self.server = Server(launcher=True)
+        self.own = 'http://127.0.0.1:%d' % self.server.port
+        self.body = {'name': 'my circuit', 'sch': '(kicad_sch)', 'pcb': '(kicad_pcb)', 'pro': '{}', 'ino': 'void setup(){}'}
+
+    def tearDown(self):
+        self.server.close()
+        self.env.stop()
+        self.quiet.stop()
+        kb._detected = None
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_saves_project_and_opens_both_editors(self):
+        kb._detected = ({'found': True, 'cli': os.path.join(self.bin, 'kicad-cli'), 'version': '9.0.1', 'major': 9,
+                         'source': 'PATH', 'gui': None, 'problem': None, 'searched': []}, os.path.join(self.bin, 'kicad-cli'))
+        status, r = self.server.request('POST', '/api/kicad/open', self.body, origin=self.own)
+        self.assertEqual(status, 200, r)
+        self.assertTrue(r['ok'])
+        self.assertEqual(r['opened'], ['schematic', 'pcb'])
+        folder = os.path.join(self.tmp, 'projects', 'my_circuit')
+        self.assertEqual(r['folder'], folder)
+        for rel in ('my_circuit.kicad_sch', 'my_circuit.kicad_pcb', 'my_circuit.kicad_pro', os.path.join('my_circuit', 'my_circuit.ino')):
+            self.assertTrue(os.path.isfile(os.path.join(folder, rel)), rel)
+        self.assertEqual(kb.editor_command('pcbnew', '/x.kicad_pcb', cli=os.path.join(self.bin, 'kicad-cli'), platform='linux'),
+                         [os.path.join(self.bin, 'pcbnew'), '/x.kicad_pcb'])
+
+    def test_without_kicad_still_saves_and_reports(self):
+        kb._detected = FAKE_DETECTION
+        status, r = self.server.request('POST', '/api/kicad/open', self.body, origin=self.own)
+        self.assertEqual(status, 200)
+        self.assertFalse(r['ok'])
+        self.assertEqual(r['opened'], [])
+        self.assertTrue(r['problems'])
+
+    def test_foreign_origin_and_bad_body(self):
+        status, _ = self.server.request('POST', '/api/kicad/open', self.body, origin='https://evil.example')
+        self.assertEqual(status, 403)
+        self.assertFalse(os.path.exists(os.path.join(self.tmp, 'projects')))
+        status, _ = self.server.request('POST', '/api/kicad/open', {'name': 'x'}, origin=self.own)
+        self.assertEqual(status, 400)
+
+    def test_flatpak_and_mac_commands(self):
+        flat = ['flatpak', 'run', '--command=kicad-cli', 'org.kicad.KiCad']
+        self.assertEqual(kb.editor_command('eeschema', '/p.kicad_sch', cli=flat),
+                         ['flatpak', 'run', '--command=eeschema', 'org.kicad.KiCad', '/p.kicad_sch'])
+        app = os.path.join(self.tmp, 'KiCad.app', 'Contents')
+        os.makedirs(os.path.join(app, 'MacOS'))
+        os.makedirs(os.path.join(app, 'Applications', 'Pcbnew.app'))
+        cmd = kb.editor_command('pcbnew', '/p.kicad_pcb', cli=os.path.join(app, 'MacOS', 'kicad-cli'), platform='darwin')
+        self.assertEqual(cmd, ['open', '-a', os.path.join(app, 'Applications', 'Pcbnew.app'), '/p.kicad_pcb'])
+
+
 class EndToEndExport(unittest.TestCase):
     """Real kicad-cli (if installed) makes a PDF through the bridge."""
 
