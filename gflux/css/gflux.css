@@ -167,6 +167,15 @@ body.sim-running .part { cursor: pointer; }
 .gx-silk { font-family: var(--font-mono); font-weight: 600; pointer-events: none; }
 .gx-blink { animation: blink 1.6s steps(2, start) infinite; }
 @keyframes blink { to { opacity: 0.25; } }
+.fault-ring { fill: none; stroke: #e53935; stroke-width: 3; stroke-dasharray: 9 6; pointer-events: none; animation: march 0.9s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -15; } }
+.part-settings {
+  position: absolute; z-index: 8; left: 0; top: 0; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px;
+  background: #fff; border: 1px solid var(--line); border-top: 4px solid var(--wK); box-shadow: var(--shadow);
+}
+.part-settings label { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; }
+.part-settings input { width: 72px; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 0; font: 600 16px var(--font-mono); }
+.part-settings .ps-range { font-size: 11px; color: var(--ink-2); }
 .sel-box { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 7 6; pointer-events: none; }
 
 /* Name tags with the auto-wire button */

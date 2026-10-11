@@ -67,7 +67,11 @@ GFLUX.pinRole = function (inst, pinNum) {
   const pin = def.pins.find((p) => p.num === pinNum);
   const pinName = pin.name;
   const role = { kind: def.passive ? 'passive' : pin.kind, rail: null, gpio: null, controller: !!def.controller, source: false };
-  if (def.rails && def.rails[pinName]) { role.rail = def.rails[pinName]; role.source = true; }
+  if (def.rails && def.rails[pinName]) {
+    role.rail = def.rails[pinName]; role.source = true;
+    // e.g. ESP32 VIN: USB 5 V when nothing else feeds it, otherwise an input.
+    role.soft = !!(def.softRails && def.softRails.includes(pinName));
+  }
   else if (!def.passive && pin.kind === 'gnd') role.rail = 'GND';
   if (def.controller && def.gpio && pinName in def.gpio) role.gpio = def.gpio[pinName];
   return role;

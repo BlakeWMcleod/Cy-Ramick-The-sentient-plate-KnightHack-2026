@@ -40,11 +40,26 @@ GFLUX.rules = (function () {
     const powerIns = all.filter((m) => !m.def.passive && !m.role.source && (m.pin.kind === 'v5' || m.pin.kind === 'v3'));
 
     if (rails.has('GND') && positives.length) return { level: 'blocked', reason: `Short circuit! ${positives[0]} would connect straight to GND` };
-    if (positives.length > 1) return { level: 'blocked', reason: `Connects two different supplies (${positives.join(' + ')})` };
+    // Supplies on the joined net. Soft supplies (ESP32 VIN) become inputs when something else feeds them.
+    const supplies = all.filter((m) => m.role.source && POSITIVE(m.role.rail)).map((m) => ({ m, v: GFLUX.railVoltage(m.inst, m.pin.name) }));
+    const hard = supplies.filter((x) => !x.m.role.soft);
+    const live = hard.length ? hard : supplies;
+    const volts = Array.from(new Set(live.map((x) => x.v).filter((v) => v != null)));
+    const fmt = GFLUX.formatVolts;
+    if (volts.length > 1) return { level: 'blocked', reason: `${fmt(volts[0])} and ${fmt(volts[1])} supplies would fight` };
     if (gpios.length && rails.size) return { level: 'blocked', reason: `${gpios[0].pin.name} would be tied to ${Array.from(rails)[0]}; the pin could burn out` };
     if (powerIns.length && rails.has('GND')) return { level: 'blocked', reason: `${powerIns[0].label} is a power pin; wiring it to GND does nothing` };
-    const only3v3 = all.find((m) => /^(3\.3V|3V3)$/.test(m.pin.name) && !m.role.source);
-    if (only3v3 && positives.some((r) => r !== '3V3')) return { level: 'blocked', reason: `${only3v3.def.name} is 3.3 V only. Use the 3V3 pin` };
+    // Is the supply voltage inside what each powered part accepts?
+    const v = volts.length === 1 ? volts[0] : null;
+    if (v != null) {
+      for (const m of all) {
+        const range = m.role.source ? (m.role.soft && hard.length && m.def.vin && m.def.vin[m.pin.name]) : (!m.def.passive && (m.pin.kind === 'v5' || m.pin.kind === 'v3') && m.def.volts);
+        if (!range) continue;
+        if (v > range[1] + 0.05) return { level: 'blocked', reason: `${fmt(v)} is too much for ${m.def.name} (max ${fmt(range[1])})` };
+        if (v < range[0] - 0.05) return { level: 'caution', reason: `${fmt(v)} is too low for ${m.def.name} (needs ${fmt(range[0])})` };
+      }
+    }
+    if (hard.length > 1) return { level: 'caution', reason: 'Joins two power supplies together' };
 
     if (gpios.length > 1) return { level: 'caution', reason: 'Ties two ESP32 pins together' };
     if (powerIns.length && gpios.length) return { level: 'caution', reason: 'Powering a module from a GPIO. Use 3V3 or VIN instead' };

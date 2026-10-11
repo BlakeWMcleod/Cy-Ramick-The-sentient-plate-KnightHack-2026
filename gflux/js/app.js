@@ -79,16 +79,17 @@
 
   function changed(save = true) {
     if (save) store.set('gflux.autosave', JSON.stringify(state));
-    render();
     updateLiveIssues();
+    render();
   }
 
   // Wiring mistakes pop up as soon as they happen (things not wired yet wait for Finalize).
-  let liveSig = '', liveDismissed = '';
+  let liveSig = '', liveDismissed = '', faultUids = new Set();
   function updateLiveIssues() {
     const box = document.getElementById('liveIssues');
     if (!box || !GFLUX.check) return;
     const faults = GFLUX.check.run(state).filter((i) => i.kind === 'fault');
+    faultUids = new Set(faults.filter((i) => i.level === 'error' && i.uid).map((i) => i.uid));
     const sig = faults.map((i) => i.text).join('|');
     if (!faults.length || sig === liveDismissed) { box.hidden = true; liveSig = sig; return; }
     if (sig !== liveSig || box.hidden) {
@@ -162,13 +163,19 @@
 
   const TAG_BTN = 24; // auto-wire button width (px) beside a name tag
 
+  /** Name tag text: buck/boost converters also show the voltage they're set to. */
+  function tagText(inst) {
+    const def = GFLUX.getPart(inst.type);
+    return def.converter ? `${def.name} · ${GFLUX.formatVolts(inst.vout != null ? +inst.vout : def.vout)}` : def.name;
+  }
+
   /** Where a part's name tag sits (grid units): above the board, or below it
    *  when the part has header pins along its top edge. */
   function labelSpot(inst) {
     const def = GFLUX.getPart(inst.type), box = GFLUX.partBox(inst);
     const pins = GFLUX.partPins(inst);
     const below = pins.some((p) => p.side === 'top') && !pins.some((p) => p.side === 'bottom');
-    const w = def.name.length * 7.4 + 22 + (def.controller ? 0 : TAG_BTN);
+    const w = tagText(inst).length * 7.4 + 22 + (def.controller ? 0 : TAG_BTN);
     return { cx: box.x + box.w / 2, cy: below ? box.y + box.h + 1.1 : box.y - 1.1, half: w / 2 / G, w };
   }
 
@@ -286,7 +293,7 @@
   let routeSig = '', routes = new Map(), routeUsed = new Set();
   function allRoutes() {
     refreshObstacles();
-    const sig = obstacleSig + '#' + JSON.stringify(state.wires);
+    const sig = obstacleSig + '#' + JSON.stringify(state.wires) + '#' + state.parts.map((p) => p.vout || '').join(',');
     if (sig === routeSig) return routes;
     routes = new Map();
     routeUsed = new Set();
@@ -422,6 +429,7 @@
       parts += `<g class="part${selected ? ' selected' : ''}" data-uid="${inst.uid}" transform="${partTransform(inst)}">${artCache.get(inst.type)}</g>`;
       const box = GFLUX.partBox(inst);
       if (selected) labels += `<rect class="sel-box" x="${(box.x - 0.9) * G}" y="${(box.y - 0.9) * G}" width="${(box.w + 1.8) * G}" height="${(box.h + 1.8) * G}"/>`;
+      if (faultUids.has(inst.uid)) labels += `<rect class="fault-ring" x="${(box.x - 1.3) * G}" y="${(box.y - 1.3) * G}" width="${(box.w + 2.6) * G}" height="${(box.h + 2.6) * G}" rx="8"/>`;
       labels += labelMarkup(inst, def);
       for (const p of GFLUX.partPins(inst)) {
         const ref = { uid: inst.uid, pin: p.num };
@@ -469,6 +477,7 @@
     $('#legend').hidden = !wiring;
     $('#hint').hidden = !!wiring;
     $('#stats').textContent = `${state.parts.length} parts · ${state.wires.length} wires · ${Math.round(view.k * 100)}%`;
+    placePartSettings();
     $$('[data-act="undo"]').forEach((b) => { b.disabled = !undoStack.length; });
     $$('[data-act="redo"]').forEach((b) => { b.disabled = !redoStack.length; });
   }
@@ -479,7 +488,7 @@
     let s = `<g class="part-label cat-${def.cat}" data-uid="${inst.uid}" data-type="${esc(inst.type)}" transform="translate(${tag.cx * G} ${tag.cy * G})">` +
       `<rect class="tag" x="${-w / 2}" y="-10" width="${w}" height="20" rx="10"/>` +
       `<rect class="name-hit" x="${-w / 2}" y="-10" width="${nameW}" height="20"/>` +
-      `<text x="${-w / 2 + nameW / 2}" y="4.5" text-anchor="middle">${esc(def.name)}</text>`;
+      `<text x="${-w / 2 + nameW / 2}" y="4.5" text-anchor="middle">${esc(tagText(inst))}</text>`;
     if (!def.controller) {
       const info = autowireInfo(inst.uid);
       if (info) {
@@ -1709,6 +1718,47 @@
       document.addEventListener('keydown', key, true);
     });
   }
+
+  // --------------------------------------------- converter output voltage
+  const settings = document.getElementById('partSettings');
+  function placePartSettings() {
+    if (!settings) return;
+    const inst = sel && sel.kind === 'part' ? instOf(sel.id) : null;
+    const def = inst && GFLUX.getPart(inst.type);
+    if (!def || !def.converter || simRunning) { settings.hidden = true; return; }
+    const box = GFLUX.partBox(inst);
+    settings.style.transform = `translate(${(box.x + box.w + 1.2) * G * view.k + view.x}px, ${(box.y - 0.5) * G * view.k + view.y}px)`;
+    if (settings.hidden || settings.dataset.uid !== inst.uid) {
+      settings.dataset.uid = inst.uid;
+      const input = settings.querySelector('input');
+      input.value = inst.vout != null ? inst.vout : def.vout;
+      input.min = def.voutRange[0]; input.max = def.voutRange[1];
+      settings.querySelector('.ps-range').textContent = `${def.converter === 'buck' ? 'Step-down' : 'Step-up'} · ${def.voutRange[0]}–${def.voutRange[1]} V`;
+    }
+    settings.hidden = false;
+  }
+  if (settings) {
+    const input = settings.querySelector('input');
+    input.addEventListener('focus', () => snapshot());
+    input.addEventListener('input', () => {
+      const inst = instOf(settings.dataset.uid), v = parseFloat(input.value);
+      if (!inst || !isFinite(v)) return;
+      inst.vout = v;
+      store.set('gflux.autosave', JSON.stringify(state));
+      updateLiveIssues();
+      render();
+    });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+  }
+
+  // Clicking a live problem jumps to the part; × hides it until something changes.
+  const liveBox = document.getElementById('liveIssues');
+  if (liveBox) liveBox.addEventListener('click', (e) => {
+    if (e.target.closest('.x')) { liveDismissed = liveSig; liveBox.hidden = true; return; }
+    const li = e.target.closest('li[data-uid]');
+    const inst = li && instOf(li.dataset.uid);
+    if (inst) { sel = { kind: 'part', id: inst.uid }; ensureVisible(inst); render(); }
+  });
 
   // ------------------------------------------------------- simulator hooks
   let simRunning = false;
