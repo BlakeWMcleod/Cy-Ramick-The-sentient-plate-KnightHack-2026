@@ -117,10 +117,54 @@ def find_arduino(refresh=False):
     return info
 
 
-def health():
-    info = dict(find_arduino())
+def find_ide():
+    """The Arduino IDE app, if installed: argv prefix that opens a sketch in it."""
+    if sys.platform == 'win32':
+        for base in (os.environ.get('LOCALAPPDATA', ''), os.environ.get('ProgramFiles', ''), os.environ.get('ProgramFiles(x86)', '')):
+            for rel in (os.path.join('Programs', 'Arduino IDE', 'Arduino IDE.exe'), os.path.join('Arduino IDE', 'Arduino IDE.exe'), os.path.join('Arduino', 'arduino.exe')):
+                path = os.path.join(base, rel)
+                if base and os.path.isfile(path):
+                    return [path]
+    elif sys.platform == 'darwin':
+        for app in ('/Applications/Arduino IDE.app', os.path.expanduser('~/Applications/Arduino IDE.app'), '/Applications/Arduino.app'):
+            if os.path.isdir(app):
+                return ['open', '-a', app]
+    else:
+        for name in ('arduino-ide', 'arduino'):
+            path = shutil.which(name)
+            if path:
+                return [path]
+    return None
+
+
+def health(refresh=False):
+    info = dict(find_arduino(refresh))
+    ide = find_ide()
+    info['ide'] = ide[-1] if ide else None
     info['setup'] = setup_status()
     return info
+
+
+def open_sketch(name, code):
+    """Save the sketch as Documents/GFLUX/<name>/<name>/<name>.ino and open it in the Arduino IDE."""
+    name = kb.safe_name(name)
+    if not isinstance(code, str) or not code.strip():
+        raise ValueError('missing code')
+    folder = os.path.join(kb.documents_dir(), name, name)
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, name + '.ino')
+    kb.write(path, code)
+    ide = find_ide()
+    if ide:
+        kb.launch(ide + [path])
+        return {'ok': True, 'path': path, 'opened': 'Arduino IDE'}
+    # No IDE found: let the computer open .ino files with whatever it uses for them.
+    if not os.environ.get('GFLUX_NO_LAUNCH'):
+        if sys.platform == 'win32':
+            os.startfile(path)  # noqa: S606  (opens with the associated app)
+        else:
+            kb.launch(['open' if sys.platform == 'darwin' else 'xdg-open', path])
+    return {'ok': True, 'path': path, 'opened': 'default app', 'note': 'Arduino IDE not found, so it opened with your default app.'}
 
 
 # ------------------------------------------------------------------- checking

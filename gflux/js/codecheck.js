@@ -102,7 +102,7 @@ GFLUX.codecheck = (function () {
     b.className = 'code-issues' + (errors ? '' : items.length ? ' warn-only' : ' all-good');
     b.innerHTML = `<button class="x" aria-label="Dismiss">×</button><h4>Code check</h4>` +
       `<p class="ci-status">${status}</p>` +
-      (items.length ? `<ul>${items.map((i) => `<li class="${i.level}">${esc(i.text)}${i.line ? ` <span>· line ${i.line}</span>` : ''}</li>`).join('')}</ul>` : '') +
+      (items.length ? `<ul>${items.map((i) => `<li class="${i.level}"${i.line ? ` data-line="${i.line}"` : ''}>${esc(i.text)}${i.line ? ` <span>· line ${i.line}</span>` : ''}</li>`).join('')}</ul>` : '') +
       (actions || '');
     b.hidden = false;
   }
@@ -112,6 +112,8 @@ GFLUX.codecheck = (function () {
     const act = e.target.closest('[data-ci]');
     if (act && act.dataset.ci === 'setup') setup(act.dataset.libs ? JSON.parse(act.dataset.libs) : []);
     if (act && act.dataset.ci === 'again' && lastCode) run(lastCode);
+    const li = e.target.closest('li[data-line]');
+    if (li && GFLUX.codeEditor) GFLUX.codeEditor.goto(+li.dataset.line);
   }
 
   const merge = (a, b) => {
@@ -125,8 +127,26 @@ GFLUX.codecheck = (function () {
     return board && board.type === 'esp32c3' ? 'esp32:esp32:esp32c3' : 'esp32:esp32:esp32';
   }
 
+  /** While typing: instant checks only. The popup shows up only when something is wrong. */
+  let liveShown = false;
+  function live(code) {
+    if (busy) return;
+    lastCode = code;
+    lastCompile = null;
+    const fast = quick(code, app().state);
+    if (!fast.length) {
+      if (liveShown && box) box.hidden = true;
+      liveShown = false;
+      return;
+    }
+    render(`${fast.length} issue${fast.length === 1 ? '' : 's'} found`, fast,
+      '<p class="ci-note">Click a line to jump to it. <b>Check with Arduino</b> runs the full compiler.</p>');
+    liveShown = true;
+  }
+
   /** Check `code`: instant checks right away, then the Arduino compiler if the app is here. */
   async function run(code) {
+    liveShown = false;
     lastCode = code;
     lastCompile = null;
     const state = app().state;
@@ -192,6 +212,7 @@ GFLUX.codecheck = (function () {
     debounce = setTimeout(() => {
       const fast = quick(lastCode, app().state);
       if (lastCompile) showResult(lastCompile, fast);
+      else if (liveShown) live(lastCode);
       else if (!app().appBase) run(lastCode);
     }, 400);
   }
@@ -368,5 +389,5 @@ void loop() {
     return { state, code: ex.code(pins), title: ex.title };
   }
 
-  return { quick, shorten, run, circuitChanged, buildExample, EXAMPLES };
+  return { quick, shorten, live, run, circuitChanged, buildExample, EXAMPLES };
 })();

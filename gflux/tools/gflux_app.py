@@ -236,7 +236,7 @@ def main():
     kicad_bridge.set_ui_runner(runner)
     say('=' * 60)
     say(' GFLUX is running at %s' % url)
-    say(' Keep this window open while you use GFLUX. Close it to quit.')
+    say(' Keep this window open')
     say('=' * 60)
     say(' Looking for KiCad...')
     info = kicad_bridge.detect_kicad()  # before the browser opens, so the page shows the right status

@@ -9,6 +9,7 @@ Serves the gflux/ folder at http://localhost:8765/ and exposes kicad-cli:
     POST /api/kicad/recheck    -> look for KiCad again, returns the same shape as health
     POST /api/kicad/locate     -> show a file picker on this computer so the user can point
                                   at their KiCad; saves it and returns health (+ located/message)
+    GET  /api/arduino/health   -> Arduino status (?refresh=1 re-scans); POST /api/arduino/check|setup|open: see arduino_bridge.py
     GET  /api/kicad/install    -> install status {"state": "idle|running|done|failed|manual", ...}
     POST /api/kicad/install    -> start installing KiCad (winget / Homebrew)
     POST /api/kicad/schematic  {name, sch}            -> zip: .kicad_sch, -schematic.pdf, -schematic.svg
@@ -1080,7 +1081,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(200, install_status())
         if route == '/api/arduino/health':
             import arduino_bridge
-            return self.send_json(200, arduino_bridge.health())
+            return self.send_json(200, arduino_bridge.health(refresh='refresh=1' in self.path))
         if route == '/api/arduino/setup':
             import arduino_bridge
             return self.send_json(200, arduino_bridge.setup_status())
@@ -1090,7 +1091,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         route = self.path.split('?')[0].rstrip('/')
-        if route in ('/api/arduino/check', '/api/arduino/setup'):
+        if route in ('/api/arduino/check', '/api/arduino/setup', '/api/arduino/open'):
             # Compiling and installing run programs on this computer: GFLUX's own page only.
             if not self.same_origin():
                 return self.send_json(403, {'ok': False, 'error': 'this request must come from the GFLUX page itself'})
@@ -1099,6 +1100,8 @@ class Handler(SimpleHTTPRequestHandler):
                 data = self.read_json(optional=True)
                 if route == '/api/arduino/setup':
                     return self.send_json(200, arduino_bridge.start_setup(data.get('libs')))
+                if route == '/api/arduino/open':
+                    return self.send_json(200, arduino_bridge.open_sketch(data.get('name'), data.get('code')))
                 code = data.get('code')
                 if not isinstance(code, str) or not code.strip():
                     raise ValueError('missing code')

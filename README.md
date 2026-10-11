@@ -48,6 +48,12 @@ The **KiCad** menu offers:
 - **Download KiCad project:** a `.zip` with the project, schematic, board and generated `.ino` sketch
 - **Check again / Locate / Install:** ask the app to find KiCad, point it at your install, or install KiCad for you
 
+### Code and Arduino IDE
+
+- **Code panel** (right side): an editor for your ESP32 sketch, with four example projects and starter code. Simple mistakes show up as you type; click one to jump to its line. **Check with Arduino** runs the real Arduino compiler. Drag the panel's left edge to resize it.
+- **Arduino IDE menu:** check the code, open the sketch in the Arduino IDE, download it as `.ino`, or let GFLUX set up Arduino and ESP32 support.
+- The lights on the **KiCad** and **Arduino IDE** tabs turn green when each one is connected, and red when it isn't.
+
 
 ## Parts library
  50 modules you can buy on Amazon, each with a plain name and its real pinout:

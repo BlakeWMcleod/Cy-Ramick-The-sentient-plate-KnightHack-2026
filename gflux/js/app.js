@@ -54,6 +54,7 @@
     sel = null;
     $('#projName').value = state.name;
     renderLibrary();
+    if (GFLUX.codeEditor) GFLUX.codeEditor.load(state);
   }
 
   /** Custom parts from this project plus the user's personal library. */
@@ -73,7 +74,8 @@
   function restore(from, to) {
     if (!from.length) return;
     to.push(JSON.stringify(state));
-    loadState(JSON.parse(from.pop()));
+    // Undo / redo is for the circuit: the sketch in the editor stays as it is.
+    loadState(Object.assign(JSON.parse(from.pop()), { code: state.code }));
     changed(false);
   }
 
@@ -364,15 +366,14 @@
   const pathLen = (pts) => pts.reduce((n, p, i) => (i ? n + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) * G : 0), 0);
 
   /** Glowing white pulses (radial gradient) travelling the way current flows. */
-  function pulseMarkup(d, len, kind) {
+  function pulseMarkup(d, len, kind, cap) {
     const spacing = Math.max(40, anim.gap * 6), rad = anim.size * 7;
     const dur = Math.max(0.4, len / (FLOW_SPEED[kind] * anim.speed));
-    const n = Math.min(14, Math.max(1, Math.round(len / spacing)));
+    const n = Math.min(cap, Math.max(1, Math.round(len / spacing)));
     let s = '';
     for (let i = 0; i < n; i++) {
       const begin = (-dur * i / n).toFixed(3);
       s += `<circle class="pulse" r="${rad}" fill="url(#gx-pulse)">` +
-        `<animate attributeName="r" values="${rad * 0.85};${rad * 1.1};${rad * 0.85}" dur="1.6s" begin="${begin}s" repeatCount="indefinite"/>` +
         `<animateMotion dur="${dur.toFixed(3)}s" begin="${begin}s" repeatCount="indefinite" path="${d}"/></circle>`;
     }
     return s;
@@ -380,8 +381,8 @@
 
   /** Moving particles along a wire, pointing the way current flows. Uses SMIL
    *  so it always runs, independent of the OS "reduce motion" CSS setting. */
-  function flowMarkup(d, kind, pts) {
-    if (anim.style === 'pulse') return pulseMarkup(d, pathLen(pts), kind);
+  function flowMarkup(d, kind, pts, most) {
+    if (anim.style === 'pulse') return pulseMarkup(d, pathLen(pts), kind, most);
     const gap = +anim.gap, size = +anim.size;
     let dash = size * 2.4, cap = 'butt', width = size;
     if (anim.style === 'dot') { dash = 0.01; cap = 'round'; width = size * 1.8; }
@@ -409,13 +410,47 @@
     return awCache.get(uid);
   }
 
+  // Layers are only rebuilt when their markup changes. Rebuilding the current
+  // layer restarts every pulse animation, which flickers on big circuits.
+  const layerHtml = {};
+  function setLayer(k, html) {
+    if (layerHtml[k] === html) return;
+    layerHtml[k] = html;
+    L[k].innerHTML = html;
+  }
+
+  const PULSE_BUDGET = 90; // pulses on screen in total, however many wires carry current
+  function renderFlow(items) {
+    // Hidden while a part is dragged: its wires re-route on every step.
+    if (drag && drag.mode === 'part' && drag.moved) { setLayer('flow', ''); return; }
+    const sig = JSON.stringify(anim) + items.map((f) => f.id + f.kind + f.d).join('|');
+    if (layerHtml.flowSig === sig) return;
+    layerHtml.flowSig = sig;
+    const cap = Math.max(1, Math.min(14, Math.floor(PULSE_BUDGET / Math.max(1, items.length))));
+    // The glow only shows inside its wire: masked by the wire's own stroke.
+    layerHtml.flow = L.flow.innerHTML = items.map((f) => `<mask id="fm-${f.id}" maskUnits="userSpaceOnUse" x="-100000" y="-100000" width="200000" height="200000">` +
+      `<path d="${f.d}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></mask>` +
+      `<g mask="url(#fm-${f.id})">${flowMarkup(pathD(f.fp), f.kind, f.fp, cap)}</g>`).join('');
+  }
+
+  /** Pan / zoom only: move the world, leave every layer (and its animations) alone. */
+  function renderView() {
+    const t = `translate(${view.x} ${view.y}) scale(${view.k})`;
+    $('#world1').setAttribute('transform', t);
+    $('#world2').setAttribute('transform', t);
+    requestGrid();
+    $('#stats').textContent = `${state.parts.length} parts · ${state.wires.length} wires · ${Math.round(view.k * 100)}%`;
+    placePartSettings();
+  }
+
   function render() {
     const nl = GFLUX.buildNets(state);
     const flows = anim.on ? GFLUX.rules.flow(state) : new Map();
     $('#world1').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
     $('#world2').setAttribute('transform', `translate(${view.x} ${view.y}) scale(${view.k})`);
 
-    let parts = '', labels = '', pins = '', wires = '', flow = '';
+    let parts = '', labels = '', pins = '', wires = '';
+    const flowing = [];
     const wiring = drag && drag.mode === 'wire';
     const pinClass = (ref) => {
       if (!wiring) return '';
@@ -453,30 +488,22 @@
         `<path class="w-glow" d="${d}"/><path class="w-edge" d="${d}"/><path class="w-core" d="${d}" stroke="${hex}"/>${ends}` +
         `<path class="w-hit" d="${d}"/></g>`;
       const f = flows.get(w.id);
-      if (f && f.dir && anim[f.kind]) {
-        const fp = f.dir > 0 ? pts : pts.slice().reverse();
-        // The glow only shows inside this wire: masked by the wire's own stroke.
-        const m = 'fm-' + w.id;
-        flow += `<mask id="${m}" maskUnits="userSpaceOnUse" x="-100000" y="-100000" width="200000" height="200000">` +
-          `<path d="${d}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></mask>` +
-          `<g mask="url(#${m})">${flowMarkup(pathD(fp), f.kind, fp)}</g>`;
-      }
+      if (f && f.dir && anim[f.kind]) flowing.push({ id: w.id, d, kind: f.kind, fp: f.dir > 0 ? pts : pts.slice().reverse() });
     }
     for (const pt of looseEnds.values()) {
       wires += `<circle class="w-free" cx="${pt.x * G}" cy="${pt.y * G}" r="4.5"/>`;
       pins += `<circle class="pin free-end${pinClass({ pt })}" data-pt="${pt.x},${pt.y}" cx="${pt.x * G}" cy="${pt.y * G}" r="7"/>`;
     }
-    L.parts.innerHTML = parts;
-    L.wires.innerHTML = wires;
-    L.flow.innerHTML = flow;
-    L.labels.innerHTML = labels;
-    L.pins.innerHTML = pins;
+    setLayer('parts', parts);
+    setLayer('wires', wires);
+    setLayer('labels', labels);
+    setLayer('pins', pins);
+    renderFlow(flowing);
     renderPreview();
     svg.classList.toggle('wiring', !!wiring);
     svg.classList.toggle('dim-on', !!anim.dim);
     requestGrid();
     $('#legend').hidden = !wiring;
-    $('#hint').hidden = !!wiring;
     $('#stats').textContent = `${state.parts.length} parts · ${state.wires.length} wires · ${Math.round(view.k * 100)}%`;
     placePartSettings();
     $$('[data-act="undo"]').forEach((b) => { b.disabled = !undoStack.length; });
@@ -893,7 +920,7 @@
       view.x = drag.vx + e.clientX - drag.sx;
       view.y = drag.vy + e.clientY - drag.sy;
       drag.moved = drag.moved || Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 3;
-      if (drag.moved) render();
+      if (drag.moved) renderView();
     } else if (drag.mode === 'part') {
       const nx = Math.round(world.x - drag.ox), ny = Math.round(world.y - drag.oy);
       if (nx !== drag.inst.x || ny !== drag.inst.y) {
@@ -963,7 +990,7 @@
     view.x = px - ((px - view.x) / view.k) * k;
     view.y = py - ((py - view.y) / view.k) * k;
     view.k = k;
-    render();
+    renderView();
   }
 
   /** The view that shows the whole project. */
@@ -988,7 +1015,7 @@
       const step = (now) => {
         const t = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - t, 3);
         view = { x: from.x + (target.x - from.x) * e, y: from.y + (target.y - from.y) * e, k: from.k + (target.k - from.k) * e };
-        render();
+        renderView();
         if (t < 1) requestAnimationFrame(step); else done();
       };
       requestAnimationFrame(step);
@@ -1249,11 +1276,12 @@
       appBase = location.origin;
       try {
         const { data } = await api('/api/kicad/health', {}, 4000);
-        if (data && data.bridge) { setKicad(data); return; }
+        if (data && data.bridge) { setKicad(data); refreshArduino(false); return; }
       } catch (e) { /* not the app */ }
     }
     appBase = null;
     setKicad(null);
+    setArduino(null);
     showGate();
   }
 
@@ -1285,6 +1313,7 @@
     }
     if (data) kicadInfo = Object.assign({ state: st }, data);
     chip.dataset.state = st;
+    $('#kicadLight').dataset.on = st === 'ok' ? '1' : st === 'installing' ? 'wait' : '0';
     status.dataset.state = st;
     status.innerHTML = `<i></i><span>${text}${detail}</span>`;
   }
@@ -1326,6 +1355,84 @@
         if (st.state === 'done') { kicadAction('recheck'); return; }
         setKicad(Object.assign({}, kicadInfo, { ok: false, install: st }));
         toast(st.message, 'warn');
+      }
+    } catch (e) {
+      toast('Could not reach the GFLUX app: ' + e.message, 'bad');
+    }
+  }
+
+  // --------------------------------------------------------- Arduino IDE
+
+  let arduinoInfo = null, ardPoll = null;
+  /** Show Arduino's status in its menu and as the tab light. */
+  function setArduino(data) {
+    const status = $('#arduinoStatus'), light = $('#arduinoLight');
+    arduinoInfo = data;
+    let st, text, detail = '';
+    if (!appBase) {
+      st = 'browser';
+      text = `Not linked to Arduino. Open GFLUX through the <a href="${RELEASE}" target="_blank" rel="noopener">GFLUX app</a> to check code with the real Arduino compiler. Quick checks still work here.`;
+    } else if (!data) {
+      st = 'checking'; text = 'Looking for Arduino…';
+    } else if (data.setup && data.setup.state === 'running') {
+      st = 'installing'; text = esc(data.setup.message || 'Setting up Arduino…');
+    } else if (data.ok && data.esp32) {
+      st = 'ok';
+      text = `<b>Arduino ${esc(data.version || '')}</b> ready with ESP32 support${data.source ? ' (' + esc(data.source) + ')' : ''}.` + (data.ide ? '' : ' The Arduino IDE app wasn\'t found, so sketches open in your default app.');
+      if (data.cli) detail = `<small>${esc(data.cli)}</small>`;
+    } else if (data.ok) {
+      st = 'missing'; text = `Arduino ${esc(data.version || '')} found, but ESP32 support isn't installed yet. Use <b>Set up Arduino</b>.`;
+    } else {
+      st = 'missing'; text = 'Arduino wasn\'t found on this computer. Use <b>Set up Arduino</b> to download it from arduino.cc (with ESP32 support).';
+    }
+    status.dataset.state = st === 'checking' ? 'installing' : st;
+    status.innerHTML = `<i></i><span>${text}${detail}</span>`;
+    light.dataset.on = st === 'ok' ? '1' : st === 'installing' || st === 'checking' ? 'wait' : '0';
+  }
+
+  async function refreshArduino(rescan) {
+    if (!appBase) { setArduino(null); return; }
+    setArduino(null);
+    try { setArduino((await api('/api/arduino/health' + (rescan ? '?refresh=1' : ''))).data); } catch (e) { setArduino({ ok: false }); }
+  }
+
+  /** The sketch in the Code editor, or the starter code. */
+  function currentSketch() {
+    return (GFLUX.codeEditor && GFLUX.codeEditor.value) || GFLUX.codegen.sketch(state);
+  }
+
+  async function arduinoAction(act) {
+    if (act === 'ardcheck') { GFLUX.codecheck.run(currentSketch()); return; }
+    if (act === 'ardino') {
+      const base = fileBase();
+      download(base + '.ino', currentSketch());
+      toast(`Downloaded ${base}.ino. Put it in a folder named ${base} to open it in the Arduino IDE.`);
+      return;
+    }
+    if (!appBase) { showGate(); return; }
+    try {
+      if (act === 'ardrecheck') {
+        await refreshArduino(true);
+        toast(arduinoInfo && arduinoInfo.ok && arduinoInfo.esp32 ? `Arduino ${arduinoInfo.version} is ready.` : 'Arduino isn\'t ready yet. Try Set up Arduino.', arduinoInfo && arduinoInfo.ok ? '' : 'warn');
+      } else if (act === 'ardopen') {
+        const { status, data } = await api('/api/arduino/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: fileBase(), code: currentSketch() }) });
+        if (status >= 400) throw new Error(data.error || 'HTTP ' + status);
+        toast(data.opened === 'Arduino IDE' ? `Opened in the Arduino IDE (${data.path}).` : `Saved ${data.path}. ${data.note || ''}`);
+      } else if (act === 'ardsetup') {
+        if (arduinoInfo && arduinoInfo.ok && arduinoInfo.esp32 && !confirm('Arduino is already set up. Install the libraries this circuit needs?')) return;
+        const libs = GFLUX.codegen ? GFLUX.codegen.libraries(state) : [];
+        await api('/api/arduino/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ libs }) });
+        toast('Setting up Arduino. This can take a few minutes the first time.', 'warn');
+        clearInterval(ardPoll);
+        ardPoll = setInterval(async () => {
+          try {
+            const { data } = await api('/api/arduino/setup');
+            if (data.state === 'running') { setArduino(Object.assign({}, arduinoInfo, { setup: data })); return; }
+            clearInterval(ardPoll);
+            await refreshArduino(true);
+            toast(data.state === 'done' ? 'Arduino is ready for code checks.' : (data.message || 'Arduino setup stopped.'), data.state === 'done' ? '' : 'bad');
+          } catch (e) { /* app busy; keep polling */ }
+        }, 2500);
       }
     } catch (e) {
       toast('Could not reach the GFLUX app: ' + e.message, 'bad');
@@ -1473,6 +1580,11 @@
     install: () => kicadAction('install'),
     recolor: recolorAll,
     finalize: openFinalize,
+    ardcheck: () => arduinoAction('ardcheck'),
+    ardopen: () => arduinoAction('ardopen'),
+    ardino: () => arduinoAction('ardino'),
+    ardrecheck: () => arduinoAction('ardrecheck'),
+    ardsetup: () => arduinoAction('ardsetup'),
     copy: copySelection,
     paste: pasteClipboard,
     duplicate: () => { if (copySelection()) pasteClipboard(); },
@@ -1491,7 +1603,7 @@
       // Only the editor's own buttons (menus, tools); the Code panel has its own data-act buttons.
       const b = e.target.closest('#topbar [data-act], .tools [data-act]');
       if (!b || b.disabled || !ACTIONS[b.dataset.act]) return;
-      if (simRunning && !['save', 'sch', 'pcb', 'zip', 'recheck', 'locate', 'install'].includes(b.dataset.act)) {
+      if (simRunning && !/^(save|sch|pcb|zip|recheck|locate|install|ard)/.test(b.dataset.act)) {
         toast('Stop the running code to change the circuit.', 'warn');
         return;
       }
@@ -1603,8 +1715,46 @@
     d.dataset.tab = tab;
     $$('#rail [data-tab]').forEach((b) => b.setAttribute('aria-pressed', String(!same && b.dataset.tab === tab)));
     $$('.panel').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+    setDrawerWidth(+store.get('gflux.drawerW.' + tab) || (tab === 'assistant' ? 460 : 370));
     if (!same && tab === 'library') setTimeout(() => $('#libSearch').focus(), 180);
   }
+
+  // Each panel remembers its own width.
+  function setDrawerWidth(w) {
+    const max = Math.max(300, window.innerWidth - 220);
+    w = Math.round(Math.min(max, Math.max(300, w)));
+    document.documentElement.style.setProperty('--drawer-w', w + 'px');
+    return w;
+  }
+  (function drawerResize() {
+    const grip = $('#drawerGrip');
+    if (!grip) return;
+    grip.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      grip.setPointerCapture(e.pointerId);
+      const d = $('#drawer'), x0 = e.clientX, w0 = d.offsetWidth;
+      grip.classList.add('active');
+      document.body.classList.add('resizing');
+      const move = (ev) => setDrawerWidth(w0 + x0 - ev.clientX);
+      const up = (ev) => {
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+        grip.removeEventListener('pointercancel', up);
+        grip.classList.remove('active');
+        document.body.classList.remove('resizing');
+        store.set('gflux.drawerW.' + d.dataset.tab, String(setDrawerWidth(w0 + x0 - ev.clientX)));
+      };
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+      grip.addEventListener('pointercancel', up);
+    });
+    grip.addEventListener('dblclick', () => {
+      const tab = $('#drawer').dataset.tab;
+      store.set('gflux.drawerW.' + tab, '');
+      setDrawerWidth(tab === 'assistant' ? 460 : 370);
+    });
+  })();
 
   // ------------------------------------------------------------------ toast
 
@@ -1696,7 +1846,7 @@
     loadState(saved && Array.isArray(saved.parts) ? saved : freshProject());
     render();
     fitView();
-    if (GFLUX.assistant) GFLUX.assistant.mount($('#assistantRoot'), { getState: () => state, toast });
+    if (GFLUX.codeEditor) GFLUX.codeEditor.mount($('#assistantRoot'));
     showSplash().then(connectApp);
     // Ask Chrome to keep GFLUX's saved work even when the disk gets full.
     if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
@@ -1775,6 +1925,8 @@
   window.GFLUX.app = {
     get state() { return state; },
     addPart, render, fitView, toast, runAutowire, loadProject,
+    /** Autosave the project (the Code editor calls this as you type). */
+    save: () => store.set('gflux.autosave', JSON.stringify(state)),
     /** Base URL of the GFLUX app when this page is served by it, else null. */
     get appBase() { return appBase; },
     /** Call the GFLUX app: -> { status, data }. */
