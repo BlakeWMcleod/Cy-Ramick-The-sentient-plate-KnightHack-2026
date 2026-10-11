@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GFLUX Circuit Builder</title>
+  <meta name="description" content="GFLUX: a beginner-friendly ESP32 circuit builder with real parts, safe wiring, KiCad export and an AI coding assistant.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 26V12a6 6 0 0 1 12 0v8a6 6 0 0 0 12 0' fill='none' stroke='%23e53935' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="css/gflux.css">
+  <link rel="stylesheet" href="css/assistant.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand" aria-label="GFLUX">
+      <svg class="brand-mark" viewBox="0 0 40 32" aria-hidden="true"><path d="M5 27V13a7 7 0 0 1 14 0v6a7 7 0 0 0 14 0V5" fill="none" stroke="var(--wR)" stroke-width="5.5" stroke-linecap="round"/><circle cx="5" cy="27" r="3" fill="#cfd3d8"/><circle cx="33" cy="5" r="3" fill="#cfd3d8"/></svg>
+      <span class="brand-word"><b>G</b>FLUX</span>
+    </div>
+    <label class="proj">
+      <span class="sr">Project name</span>
+      <input id="projName" spellcheck="false" autocomplete="off" maxlength="60" aria-label="Project name">
+    </label>
+
+    <div class="group" role="group" aria-label="File">
+      <button class="btn" id="btnNew" title="New circuit"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>New</span></button>
+      <button class="btn" id="btnOpen" title="Open a .gflux.json file"><svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span>Load</span></button>
+      <button class="btn" id="btnSave" title="Save to a .gflux.json file (Ctrl+S)"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/></svg><span>Save</span></button>
+      <button class="btn icon" id="btnUndo" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="btn icon" id="btnRedo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3"/></svg></button>
+    </div>
+
+    <div class="group" role="group" aria-label="KiCad">
+      <button class="btn kicad w-G" id="btnSch" title="Create a KiCad schematic"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-5 3 10 2-5h7"/></svg><span>Schematic</span></button>
+      <button class="btn kicad w-B" id="btnPcb" title="Create a KiCad PCB"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h3v4h5M8 16h8"/><circle cx="8" cy="8" r="1.4"/><circle cx="16" cy="12" r="1.4"/></svg><span>PCB</span></button>
+      <button class="btn kicad w-V" id="btnZip" title="Download a full KiCad project (.zip) with code"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16"/></svg><span>KiCad project</span></button>
+      <span class="kicad-badge" id="kicadBadge" hidden><i></i><span>KiCad</span></span>
+    </div>
+
+    <div class="group swatches" id="swatches" role="group" aria-label="Wire color"></div>
+
+    <div class="group" role="group" aria-label="View">
+      <button class="btn flow-toggle" id="btnFlow" title="Animate which way current flows" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></svg><span>Flow</span></button>
+      <button class="btn icon" id="btnZoomOut" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button class="btn icon" id="btnFit" title="Fit circuit to screen" aria-label="Fit to screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      <button class="btn icon" id="btnZoomIn" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+    </div>
+    <div class="wire-stripe" aria-hidden="true"><i class="w-R"></i><i class="w-O"></i><i class="w-Y"></i><i class="w-G"></i><i class="w-B"></i><i class="w-I"></i><i class="w-V"></i><i class="w-W"></i><i class="w-K"></i></div>
+  </header>
+
+  <main id="stage">
+    <svg id="canvas" role="application" aria-label="Circuit canvas">
+      <defs id="defs">
+        <pattern id="gridPat" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect x="7.5" y="7.5" width="5" height="5" rx="1.6" class="grid-hole" transform="translate(-10 -10)"/>
+          <rect x="7.5" y="7.5" width="5" height="5" rx="1.6" class="grid-hole" transform="translate(10 -10)"/>
+          <rect x="7.5" y="7.5" width="5" height="5" rx="1.6" class="grid-hole" transform="translate(-10 10)"/>
+          <rect x="7.5" y="7.5" width="5" height="5" rx="1.6" class="grid-hole" transform="translate(10 10)"/>
+        </pattern>
+      </defs>
+      <rect class="grid-bg" width="100%" height="100%"/>
+      <rect width="100%" height="100%" fill="url(#gridPat)"/>
+      <g id="world1">
+        <g id="L-parts"></g>
+        <g id="L-wires"></g>
+        <g id="L-flow"></g>
+        <g id="L-labels"></g>
+      </g>
+      <rect id="dim" width="100%" height="100%"/>
+      <g id="world2">
+        <g id="L-preview"></g>
+        <g id="L-pins"></g>
+      </g>
+    </svg>
+
+    <nav id="rail" aria-label="Side panels">
+      <button data-tab="library" aria-pressed="false" title="Parts library"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/></svg><span>Library</span></button>
+      <button data-tab="assistant" aria-pressed="false" title="AI coding assistant"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z"/></svg><span>Code AI</span></button>
+    </nav>
+
+    <aside id="drawer" data-tab="library" aria-label="Side panel">
+      <button class="drawer-close" id="drawerClose" aria-label="Close panel">×</button>
+      <section class="panel" data-panel="library">
+        <h2 class="panel-title">Parts bin</h2>
+        <div class="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>
+          <input id="libSearch" type="search" placeholder="Search parts… try “distance” or “screen”" autocomplete="off" aria-label="Search parts">
+        </div>
+        <div class="chips" id="libCats"></div>
+        <div class="lib-list" id="libList"></div>
+        <details class="custom-part">
+          <summary>＋ Create your own part</summary>
+          <form id="customForm">
+            <label>Short name<input name="name" required maxlength="28" placeholder="e.g. Rain sensor"></label>
+            <label>Full name<input name="full" maxlength="90" placeholder="e.g. FC-37 Rain Drop Sensor Module"></label>
+            <label>Amazon link or search words<input name="link" maxlength="300" placeholder="https://amzn.to/… or FC-37 rain sensor"></label>
+            <label>Pins, in order, separated by commas<input name="pins" required maxlength="200" placeholder="VCC, GND, DO, AO"></label>
+            <label>Board color<select name="board"><option value="blue">Blue</option><option value="green">Green</option><option value="red">Red</option><option value="black">Black</option><option value="purple">Purple</option></select></label>
+            <button class="btn primary" type="submit">Add to my library</button>
+          </form>
+        </details>
+      </section>
+      <section class="panel" data-panel="assistant" hidden>
+        <div id="assistantRoot" class="assistant-root"></div>
+      </section>
+    </aside>
+
+    <div class="floating-tools" aria-label="Selection tools">
+      <button class="btn icon" id="btnRotate" title="Rotate selected part (R)" aria-label="Rotate"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/></svg></button>
+      <button class="btn icon" id="btnDelete" title="Delete selection (Del)" aria-label="Delete"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V4h4v3M7 7l1 13h8l1-13"/></svg></button>
+    </div>
+
+    <div id="hint" class="hint">Drag from a <b>pin</b> to wire it · drag parts to move · <kbd>R</kbd> rotate · <kbd>Del</kbd> delete · scroll to zoom</div>
+    <div id="legend" class="legend" hidden>
+      <span class="lg good">Good match</span><span class="lg ok">Works</span><span class="lg caution">Careful</span><span class="lg blocked">Would break something</span><span class="lg-esc"><kbd>Esc</kbd> cancel</span>
+    </div>
+    <div id="stats" class="stats"></div>
+    <div id="tip" class="tip" hidden></div>
+    <div id="pinTip" class="pin-tip" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="modal" class="modal" hidden></div>
+  </main>
+  <input type="file" id="fileIn" accept=".json,application/json" hidden>
+
+  <script src="js/parts.js"></script>
+  <script src="js/netlist.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/kicad.js"></script>
+  <script src="js/codegen.js"></script>
+  <script src="js/assistant.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
