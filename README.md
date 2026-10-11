@@ -26,6 +26,7 @@ Opening `gflux/index.html` directly also works, but without KiCad PDFs or Gerber
 | Wire by hand | Drag from one pin to another. Let go on empty grid to leave the end loose, or click a pin and then click the grid to add bends |
 | Rotate / delete | Select, then press <kbd>R</kbd> / <kbd>Del</kbd>, or use the tools on the left |
 | Undo / redo | <kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> |
+| Copy / paste | <kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd> (<kbd>Ctrl</kbd>+<kbd>D</kbd> duplicates) |
 | Save / open | **File** menu. Work also autosaves in your browser |
 
 ### Safe wiring
@@ -70,12 +71,24 @@ The **KiCad** menu offers:
 - **Download KiCad project:** a `.zip` with the project, schematic, board and generated `.ino` sketch
 - **Check again / Locate / Install:** ask the app to find KiCad, point it at your install, or install KiCad for you
 
-### Code AI
+### Code
 
-The **Code AI** panel on the right writes ESP32 Arduino code for your circuit:
+The **Code** panel on the right writes and checks ESP32 Arduino code:
 
-- **Starter code** works offline and uses the pins you actually wired.
-- For free-form requests ("beep when something is closer than 10 cm"), add an [Anthropic API key](https://console.anthropic.com/settings/keys) under **AI settings**. The key stays in your browser.
+- **Examples:** four ready-made projects (Blink + button, Distance alarm, Weather screen, Servo knob). Each one loads its wired circuit and its sketch.
+- **Starter code:** works offline and uses the pins you actually wired.
+- **Check / Check my code:** catches big mistakes in a few words, such as "Missing ; · line 12", "GPIO34 is input-only", "GPIO13 not wired" or "Missing library ESP32Servo".
+  - Through the GFLUX app it compiles with the real Arduino compiler (`arduino-cli`, found in your Arduino IDE, or downloaded on request together with ESP32 support).
+  - In a plain browser it runs the quick checks only.
+- **AI:** for free-form requests ("beep when something is closer than 10 cm"), add an [Anthropic API key](https://console.anthropic.com/settings/keys) under **AI settings**. The key stays in your browser.
+
+### Power and voltage checks
+
+The **Buck converter** (steps voltage down) and **Boost converter** (steps it up) have an adjustable output: select one and type the volts. GFLUX works out the voltage on every power line and flags problems live, such as "6V too high [RFID card reader]", "Buck needs 6.5V+ in" or "5V signal on D18". The part with the problem gets a red outline.
+
+### Finalize
+
+**Finalize** lists every remaining problem in a few words. Choose **Back out** or **Finalize**. Finalizing saves the project to `Documents/GFLUX/<name>`, opens the schematic and PCB in KiCad, and shows a shopping list with Amazon links.
 
 ## Parts library
 
@@ -114,7 +127,8 @@ Every push that changes `gflux/` rebuilds the Windows, macOS and Linux apps (`.g
 | `gflux/js/autowire.js` | One-click auto-wiring |
 | `gflux/js/app.js`, `gflux/js/art.js` | Editor, wire router and part artwork |
 | `gflux/js/kicad.js` | KiCad schematic, PCB and project writers |
-| `gflux/js/codegen.js`, `gflux/js/assistant.js` | Starter code and the Code AI panel |
-| `gflux/tools/` | Desktop app, KiCad bridge, build script and tests |
+| `gflux/js/codegen.js`, `gflux/js/assistant.js` | Starter code and the Code panel |
+| `gflux/js/check.js`, `gflux/js/codecheck.js` | Circuit and voltage checks, code checks, examples |
+| `gflux/tools/` | Desktop app, KiCad and Arduino bridges, build script and tests |
 
 The ESP32 firmware for the sentient plate lives in [`firmware/`](firmware/README.md).

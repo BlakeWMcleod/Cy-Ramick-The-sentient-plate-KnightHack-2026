@@ -383,6 +383,29 @@ body.sim-running .part { cursor: pointer; }
 .live-issues .x { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border: 0; background: transparent; cursor: pointer; font-size: 18px; line-height: 1; color: var(--ink-2); }
 @keyframes pop-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 
+/* ------------------------------------------------------------- code check */
+.code-issues {
+  position: absolute; z-index: 9; right: 470px; bottom: 64px; width: 320px; max-height: 50%; overflow-y: auto;
+  background: #fff; border: 1px solid var(--line); border-left: 5px solid var(--wR); box-shadow: var(--shadow);
+  padding: 10px 34px 12px 12px; animation: pop-in 0.22s ease-out;
+}
+.code-issues.warn-only { border-left-color: #e6be00; }
+.code-issues.all-good { border-left-color: var(--wG); }
+.code-issues h4 { margin: 0 0 2px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.code-issues .ci-status { margin: 0 0 6px; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.code-issues .ci-status span { font-weight: 400; color: var(--ink-2); font-size: 13px; }
+.code-issues ul { list-style: none; margin: 0; padding: 0; }
+.code-issues li { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 15px; font-weight: 600; }
+.code-issues li::before { content: ''; flex: none; width: 9px; height: 9px; background: var(--wR); transform: translateY(-1px); }
+.code-issues li.warn::before { background: #e6be00; }
+.code-issues li span { font-weight: 400; color: var(--ink-2); font-family: var(--font-mono); font-size: 12px; }
+.code-issues .x { position: absolute; right: 6px; top: 6px; width: 24px; height: 24px; border: 0; background: transparent; cursor: pointer; font-size: 18px; color: var(--ink-2); }
+.code-issues .ci-actions { margin-top: 10px; display: flex; gap: 8px; }
+.code-issues .ci-note { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); }
+.ci-spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--ink); border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#drawer:not(.open) ~ .code-issues { right: 100px; }
+
 /* --------------------------------------------- finalize intro: rainbow edges */
 @property --gx-a { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 #edgeGlow {

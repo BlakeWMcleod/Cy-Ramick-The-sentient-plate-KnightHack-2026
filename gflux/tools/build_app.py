@@ -63,7 +63,7 @@ def main():
     args = [
         os.path.join(HERE, 'gflux_app.py'),
         '--name', 'GFLUX', '--onefile', '--console', '--noconfirm', '--clean',
-        '--paths', HERE, '--hidden-import', 'kicad_bridge',
+        '--paths', HERE, '--hidden-import', 'kicad_bridge', '--hidden-import', 'arduino_bridge',
         '--add-data', '%s%ssite' % (site, os.pathsep),
         '--distpath', DIST, '--workpath', os.path.join(BUILD, 'work'), '--specpath', BUILD,
     ]

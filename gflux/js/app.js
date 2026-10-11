@@ -81,6 +81,7 @@
     if (save) store.set('gflux.autosave', JSON.stringify(state));
     updateLiveIssues();
     render();
+    if (GFLUX.codecheck) GFLUX.codecheck.circuitChanged();
   }
 
   // Wiring mistakes pop up as soon as they happen (things not wired yet wait for Finalize).
@@ -1487,8 +1488,9 @@
       if (openTab && !e.target.closest('.tab')) closeMenus();
     });
     document.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-act]');
-      if (!b || b.disabled) return;
+      // Only the editor's own buttons (menus, tools); the Code panel has its own data-act buttons.
+      const b = e.target.closest('#topbar [data-act], .tools [data-act]');
+      if (!b || b.disabled || !ACTIONS[b.dataset.act]) return;
       if (simRunning && !['save', 'sch', 'pcb', 'zip', 'recheck', 'locate', 'install'].includes(b.dataset.act)) {
         toast('Stop the running code to change the circuit.', 'warn');
         return;
@@ -1773,6 +1775,10 @@
   window.GFLUX.app = {
     get state() { return state; },
     addPart, render, fitView, toast, runAutowire, loadProject,
+    /** Base URL of the GFLUX app when this page is served by it, else null. */
+    get appBase() { return appBase; },
+    /** Call the GFLUX app: -> { status, data }. */
+    api: (path, opts) => api(path, opts),
     simLayer: document.getElementById('L-sim'),
     /** fn(uid) when a part is clicked while code runs. */
     onPartClick(fn) { simHooks.click.push(fn); },
