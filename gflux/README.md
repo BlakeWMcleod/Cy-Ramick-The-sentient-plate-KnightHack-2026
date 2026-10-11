@@ -4,15 +4,31 @@ A beginner-friendly circuit builder for ESP32 projects. Place real hobby modules
 
 ## Run it
 
-Open `index.html` in a browser. Everything except the AI chat and KiCad's PDF/Gerber output works offline, with no install.
+### Easiest: the GFLUX app
 
-To have KiCad generate the PDF, SVG and Gerber files, install [KiCad](https://www.kicad.org/download/) (7 or newer) and run:
+Download **GFLUX-Windows.exe** (or the macOS/Linux build) from the repository's **Releases → "GFLUX (latest build)"** page and double-click it.
+
+- GFLUX opens in your browser, with the Schematic and PCB buttons connected to KiCad.
+- If KiCad isn't installed, the app offers to install it: through winget on Windows or Homebrew on macOS, or by opening the official download page. You can also use the orange **Install KiCad** button in the top bar.
+- Keep the small console window open while you use GFLUX. Closing it quits.
+- The app isn't code-signed. On Windows, click **More info → Run anyway** the first time. On macOS, right-click it and choose **Open**.
+
+Every push that changes `gflux/` rebuilds the app through `.github/workflows/gflux-app.yml`. To build it yourself:
+
+```bash
+pip install pyinstaller pillow
+python gflux/tools/build_app.py      # -> gflux/dist/GFLUX(.exe), for the OS you run it on
+```
+
+### Without the app
+
+Open `index.html` from inside this folder, so it stays next to its `css/` and `js/` folders. Everything except KiCad's PDF/Gerber output works offline.
+
+To have KiCad generate the PDF, SVG and Gerber files without the app, install [KiCad](https://www.kicad.org/download/) (7 or newer) and run:
 
 ```bash
 python3 tools/kicad_bridge.py      # then open http://localhost:8765
 ```
-
-The bridge uses only the Python standard library. It serves the site and runs `kicad-cli` for the **Schematic** and **PCB** buttons. When the bridge is connected, a green **KiCad** badge appears in the top bar.
 
 ## Using it
 
@@ -67,4 +83,5 @@ The left panel can write ESP32 Arduino code for your circuit.
 | `js/app.js` | Editor: canvas, wire routing, library, top bar |
 | `js/kicad.js` | KiCad schematic, PCB, project and ZIP writers |
 | `js/codegen.js`, `js/assistant.js` | Starter-code generator and AI assistant |
-| `tools/kicad_bridge.py` | Local server that drives `kicad-cli` |
+| `tools/kicad_bridge.py` | Local server that drives `kicad-cli` and can install KiCad |
+| `tools/gflux_app.py`, `tools/build_app.py` | The desktop launcher and its PyInstaller build script |

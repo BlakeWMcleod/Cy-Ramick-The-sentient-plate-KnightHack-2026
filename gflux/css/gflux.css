@@ -39,6 +39,8 @@ body {
 button, input, select, textarea { font: inherit; color: inherit; }
 kbd { font-family: var(--font-mono); font-size: 0.85em; padding: 1px 5px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface-2); }
 [hidden] { display: none !important; }
+:root { --gx-css: 1; }
+#loadError { display: none !important; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
 /* ------------------------------------------------------------------ top bar */
@@ -78,10 +80,15 @@ kbd { font-family: var(--font-mono); font-size: 0.85em; padding: 1px 5px; border
 .flow-toggle[aria-pressed="true"] svg { fill: var(--wY); stroke: color-mix(in srgb, var(--wY) 40%, #6b5300); }
 
 .kicad-badge {
-  display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 3px 9px;
-  border-radius: 99px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--wG) 16%, transparent); color: var(--wG);
+  --b: var(--wG);
+  display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; padding: 4px 10px; border: none; cursor: pointer;
+  border-radius: 99px; font-size: 12px; font-weight: 600; background: color-mix(in srgb, var(--b) 16%, transparent); color: color-mix(in srgb, var(--b) 75%, var(--ink));
 }
-.kicad-badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--wG); box-shadow: 0 0 0 3px color-mix(in srgb, var(--wG) 25%, transparent); }
+.kicad-badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--b); box-shadow: 0 0 0 3px color-mix(in srgb, var(--b) 25%, transparent); }
+.kicad-badge[data-state="missing"] { --b: var(--wO); }
+.kicad-badge[data-state="missing"]:hover { background: color-mix(in srgb, var(--b) 28%, transparent); }
+.kicad-badge[data-state="installing"] { --b: var(--wY); cursor: progress; }
+.kicad-badge[data-state="installing"] i { animation: blink 0.9s steps(2, start) infinite; }
 
 /* Wire colour swatches look like little pre-bent jumpers. */
 .swatches { gap: 3px; }
@@ -312,8 +319,13 @@ kbd { font-family: var(--font-mono); font-size: 0.85em; padding: 1px 5px; border
 @media (max-width: 1560px) {
   .group .btn:not(.kicad) span { display: none; }
   .group .btn:not(.kicad) { width: 34px; padding: 0; }
+  .proj input { width: 118px; }
+  .group { padding-left: 8px; }
+  #topbar { gap: 8px; }
+  .swatches button { width: 23px; }
+  .btn.kicad { padding: 0 10px 0 8px; }
 }
-@media (max-width: 1240px) {
+@media (max-width: 1400px) {
   .btn.kicad span { display: none; }
   .btn.kicad { width: 38px; padding: 0 0 0 4px; }
   .brand-word { display: none; }

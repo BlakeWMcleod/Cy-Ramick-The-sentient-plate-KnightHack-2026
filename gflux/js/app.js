@@ -758,24 +758,78 @@
   function closeModal() { $('#modal').hidden = true; }
   $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal(); });
 
+  // The local bridge (GFLUX app / kicad_bridge.py). `bridge` is only set while
+  // KiCad itself is usable; `bridgeBase` is set whenever the bridge answers.
+  let bridgeBase = null, installPoll = null;
+
+  async function health(base) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 1500);
+    try {
+      const res = await fetch(base + '/api/kicad/health', { signal: ctl.signal, cache: 'no-store' });
+      return res.ok ? await res.json() : null;
+    } finally { clearTimeout(timer); }
+  }
+
+  function setKicadState(data) {
+    const badge = $('#kicadBadge'), label = $('#kicadBadge span');
+    badge.hidden = false;
+    if (data.ok) {
+      bridge = Object.assign(new String(bridgeBase), { version: data.version });
+      badge.dataset.state = 'ok';
+      label.textContent = 'KiCad ' + String(data.version || '').split(/[\s-]/)[0];
+      badge.title = 'KiCad ' + data.version + ' is connected. Schematic and PCB are made by KiCad.';
+      return;
+    }
+    bridge = null;
+    const installing = data.install && data.install.state === 'running';
+    badge.dataset.state = installing ? 'installing' : 'missing';
+    label.textContent = installing ? 'Installing KiCad…' : 'Install KiCad';
+    badge.title = installing ? data.install.message : 'KiCad is not installed. Click to install it (free).';
+    if (installing) watchInstall();
+  }
+
+  function watchInstall() {
+    if (installPoll) return;
+    installPoll = setInterval(async () => {
+      try {
+        const st = await (await fetch(bridgeBase + '/api/kicad/install', { cache: 'no-store' })).json();
+        if (st.state === 'running') return;
+        clearInterval(installPoll); installPoll = null;
+        const data = await health(bridgeBase);
+        if (data) setKicadState(data);
+        if (data && data.ok) toast('KiCad is installed! Schematic and PCB now come straight from KiCad.');
+        else toast(st.message || 'KiCad install did not finish.', 'bad');
+      } catch (e) { /* bridge restarting; keep polling */ }
+    }, 4000);
+  }
+
+  async function onKicadBadge() {
+    const badge = $('#kicadBadge');
+    if (badge.dataset.state === 'ok') { toast(badge.title); return; }
+    if (badge.dataset.state === 'installing') { toast(badge.title, 'warn'); return; }
+    if (!confirm('Install KiCad (free, about 1 GB) on this computer? Your system may ask for permission.')) return;
+    try {
+      const res = await fetch(bridgeBase + '/api/kicad/install', { method: 'POST' });
+      const st = await res.json();
+      if (res.status === 403) { toast('Open GFLUX from the GFLUX app to install KiCad.', 'warn'); return; }
+      if (st.state === 'manual') { toast(st.message, 'warn'); return; } // the app opens the download page
+      if (st.state === 'done') { setKicadState(await health(bridgeBase)); return; }
+      setKicadState({ ok: false, install: st });
+      toast(st.message, 'warn');
+    } catch (e) {
+      toast('Could not reach the GFLUX app: ' + e.message, 'bad');
+    }
+  }
+
   async function detectBridge() {
     const candidates = [];
     if (/^https?:$/.test(location.protocol)) candidates.push(location.origin);
-    candidates.push('http://localhost:8765');
+    if (!candidates.includes('http://localhost:8765')) candidates.push('http://localhost:8765');
     for (const base of candidates) {
       try {
-        const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort(), 1200);
-        const res = await fetch(base + '/api/kicad/health', { signal: ctl.signal });
-        clearTimeout(timer);
-        const data = await res.json();
-        if (data.ok) {
-          bridge = Object.assign(new String(base), { version: data.version });
-          $('#kicadBadge').hidden = false;
-          $('#kicadBadge').title = 'KiCad ' + data.version + ' connected through the local bridge';
-          $('#kicadBadge span').textContent = 'KiCad ' + (data.version || '').split(/[\s-]/)[0];
-          return;
-        }
+        const data = await health(base);
+        if (data && (data.bridge || data.ok)) { bridgeBase = base; setKicadState(data); return; }
       } catch (e) { /* not running */ }
     }
   }
@@ -818,6 +872,7 @@
     $('#btnSch').onclick = () => exportKicad('sch');
     $('#btnPcb').onclick = () => exportKicad('pcb');
     $('#btnZip').onclick = () => exportKicad('project');
+    $('#kicadBadge').onclick = onKicadBadge;
     $('#btnFit').onclick = fitView;
     $('#btnZoomIn').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 1.25); };
     $('#btnZoomOut').onclick = () => { const r = svg.getBoundingClientRect(); zoomAt(r.left + r.width / 2, r.top + r.height / 2, 0.8); };
@@ -895,6 +950,9 @@
   // ------------------------------------------------------------------ boot
 
   function boot() {
+    // Reveal the UI only once the stylesheet is really there (see index.html).
+    if (getComputedStyle(document.documentElement).getPropertyValue('--gx-css').trim() !== '1') return;
+    document.documentElement.classList.add('gx-ready');
     $('#defs').innerHTML = GFLUX.art.DEFS + $('#defs').innerHTML;
     bindUI();
     let saved = null;

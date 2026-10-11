@@ -5,7 +5,9 @@
 
 Serves the gflux/ folder at http://localhost:8765/ and exposes kicad-cli:
 
-    GET  /api/kicad/health     -> {"ok": true, "version": "7.0.11", "cli": "/usr/bin/kicad-cli"}
+    GET  /api/kicad/health     -> {"ok": true, "bridge": true, "version": "7.0.11", "cli": "/usr/bin/kicad-cli"}
+    GET  /api/kicad/install    -> install status {"state": "idle|running|done|failed|manual", ...}
+    POST /api/kicad/install    -> start installing KiCad (winget / Homebrew), same-origin requests only
     POST /api/kicad/schematic  {name, sch}            -> zip: .kicad_sch, -schematic.pdf, -schematic.svg
     POST /api/kicad/pcb        {name, pcb, sch?, pro?} -> zip: .kicad_pcb, gerbers/ + drill, -pcb.pdf
 
@@ -24,6 +26,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import webbrowser
 import zipfile
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -163,6 +167,76 @@ def export_pcb(cli, data):
         return name, zip_dir(out)
 
 
+# ------------------------------------------------------------ KiCad install
+
+DOWNLOAD_PAGES = {
+    'win32': 'https://www.kicad.org/download/windows/',
+    'darwin': 'https://www.kicad.org/download/macos/',
+}
+_install = {'state': 'idle', 'message': '', 'url': None}
+_install_lock = threading.Lock()
+
+
+def install_plan():
+    """(command or None, manual download page, human description) for this OS."""
+    url = DOWNLOAD_PAGES.get(sys.platform, 'https://www.kicad.org/download/linux/')
+    if sys.platform == 'win32':
+        winget = shutil.which('winget')
+        if winget:
+            return ([winget, 'install', '--id', 'KiCad.KiCad', '-e',
+                     '--accept-package-agreements', '--accept-source-agreements'], url, 'winget (Windows Package Manager)')
+    elif sys.platform == 'darwin':
+        brew = shutil.which('brew') or next((b for b in ('/opt/homebrew/bin/brew', '/usr/local/bin/brew') if os.path.isfile(b)), None)
+        if brew:
+            return ([brew, 'install', '--cask', 'kicad'], url, 'Homebrew')
+    return (None, url, 'the KiCad website')
+
+
+def install_status():
+    with _install_lock:
+        return dict(_install)
+
+
+def start_install(open_page=True):
+    """Install KiCad in the background. Returns the status right after starting.
+    Without a package manager, opens the official download page instead."""
+    with _install_lock:
+        if _install['state'] == 'running':
+            return dict(_install)
+        if find_cli():
+            _install.update(state='done', message='KiCad is already installed.', url=None)
+            return dict(_install)
+        cmd, url, how = install_plan()
+        if not cmd:
+            _install.update(state='manual', url=url,
+                            message='Download KiCad from %s, install it, then restart GFLUX.' % url)
+            if open_page:
+                webbrowser.open(url)
+            return dict(_install)
+        _install.update(state='running', url=url,
+                        message='Installing KiCad with %s. Accept the Windows/macOS permission prompt if one appears. '
+                                'This download is about 1 GB and can take several minutes.' % how)
+
+    def work():
+        try:
+            r = subprocess.run(cmd, capture_output=True, text=True, errors='replace', timeout=3600)
+            tail = '\n'.join((r.stdout + r.stderr).strip().splitlines()[-6:])
+            ok = r.returncode == 0 or find_cli() is not None
+            with _install_lock:
+                if ok:
+                    _install.update(state='done', message='KiCad is installed.')
+                else:
+                    _install.update(state='failed', message='The installer stopped (%s). You can install KiCad from %s instead.\n%s'
+                                    % (r.returncode, url, tail))
+        except (OSError, subprocess.TimeoutExpired) as e:
+            with _install_lock:
+                _install.update(state='failed', message='Could not run the installer: %s. Get KiCad from %s.' % (e, url))
+        _version_cache.clear()
+
+    threading.Thread(target=work, daemon=True).start()
+    return install_status()
+
+
 class Handler(SimpleHTTPRequestHandler):
     server_version = 'GFLUXBridge/1.0'
 
@@ -180,6 +254,11 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-store')
         super().end_headers()
 
+    def log_message(self, fmt, *args):
+        # Keep the console readable: only report failures.
+        if len(args) > 1 and str(args[1])[:1] in '45':
+            sys.stderr.write('%s\n' % (fmt % args))
+
     def do_OPTIONS(self):
         self.send_response(204)
         self.send_header('Content-Length', '0')
@@ -193,23 +272,41 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def same_origin(self):
+        """True for requests from the page this bridge serves (or non-browser clients)."""
+        origin = self.headers.get('Origin')
+        if not origin:
+            return True
+        port = self.server.server_address[1]
+        return origin in ('http://localhost:%d' % port, 'http://127.0.0.1:%d' % port)
+
     def do_GET(self):
-        if self.path.split('?')[0].rstrip('/') == '/api/kicad/health':
+        route = self.path.split('?')[0].rstrip('/')
+        if route == '/api/kicad/health':
             cli = find_cli()
+            can_install = install_plan()[0] is not None
             if not cli:
-                return self.send_json(200, {'ok': False, 'error': 'kicad-cli not found. Install KiCad 7 or newer, '
+                return self.send_json(200, {'ok': False, 'bridge': True, 'canInstall': can_install, 'install': install_status(),
+                                            'error': 'kicad-cli not found. Install KiCad 7 or newer, '
                                             'or set KICAD_CLI to the full path of kicad-cli.'})
             try:
                 version, _ = cli_version(cli)
             except (CliError, OSError, subprocess.TimeoutExpired) as e:
-                return self.send_json(200, {'ok': False, 'error': str(e), 'stderr': getattr(e, 'stderr', '')})
-            return self.send_json(200, {'ok': True, 'version': version, 'cli': cli})
+                return self.send_json(200, {'ok': False, 'bridge': True, 'error': str(e), 'stderr': getattr(e, 'stderr', '')})
+            return self.send_json(200, {'ok': True, 'bridge': True, 'version': version, 'cli': cli})
+        if route == '/api/kicad/install':
+            return self.send_json(200, install_status())
         if self.path.startswith('/api/'):
             return self.send_json(404, {'ok': False, 'error': 'unknown endpoint'})
         return super().do_GET()
 
     def do_POST(self):
         route = self.path.split('?')[0].rstrip('/')
+        if route == '/api/kicad/install':
+            # Only GFLUX's own page may start an install, never another website.
+            if not self.same_origin():
+                return self.send_json(403, {'ok': False, 'error': 'install requests must come from the GFLUX page itself'})
+            return self.send_json(200, start_install())
         jobs = {'/api/kicad/schematic': export_schematic, '/api/kicad/pcb': export_pcb}
         if route not in jobs:
             return self.send_json(404, {'ok': False, 'error': 'unknown endpoint'})
@@ -245,13 +342,18 @@ class Handler(SimpleHTTPRequestHandler):
         self.wfile.write(blob)
 
 
+def make_server(host='127.0.0.1', port=8765, root=None):
+    """HTTP server for the GFLUX site (root) plus the KiCad API."""
+    Handler.extensions_map.update({'.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml'})
+    return ThreadingHTTPServer((host, port), partial(Handler, directory=root or ROOT))
+
+
 def main():
     ap = argparse.ArgumentParser(description='Serve GFLUX and bridge it to kicad-cli.')
     ap.add_argument('--port', type=int, default=8765)
     ap.add_argument('--host', default='127.0.0.1', help='interface to bind (default: localhost only)')
     args = ap.parse_args()
-    Handler.extensions_map.update({'.js': 'text/javascript', '.mjs': 'text/javascript', '.svg': 'image/svg+xml'})
-    httpd = ThreadingHTTPServer((args.host, args.port), partial(Handler, directory=ROOT))
+    httpd = make_server(args.host, args.port)
     cli = find_cli()
     try:
         kicad = '%s (%s)' % (cli, cli_version(cli)[0]) if cli else 'kicad-cli not found, exports disabled'

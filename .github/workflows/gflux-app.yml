@@ -1,0 +1,71 @@
+name: Build GFLUX app
+
+on:
+  push:
+    paths:
+      - 'gflux/**'
+      - '.github/workflows/gflux-app.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            file: GFLUX.exe
+            asset: GFLUX-Windows.exe
+          - os: macos-latest
+            file: GFLUX
+            asset: GFLUX-macOS
+          - os: ubuntu-latest
+            file: GFLUX
+            asset: GFLUX-Linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install build tools
+        run: python -m pip install pyinstaller==6.11.1 pillow==11.0.0
+      - name: Build
+        run: python gflux/tools/build_app.py
+      - name: Self-test the app
+        run: gflux/dist/${{ matrix.file }} --selftest --port 8790
+        shell: bash
+      - name: Rename for download
+        run: mv "gflux/dist/${{ matrix.file }}" "gflux/dist/${{ matrix.asset }}"
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: gflux/dist/${{ matrix.asset }}
+
+  release:
+    # Keep one always-current download page: Releases -> "GFLUX (latest build)".
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish the gflux-latest pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          chmod +x assets/GFLUX-macOS assets/GFLUX-Linux
+          gh release delete gflux-latest --yes --cleanup-tag || true
+          gh release create gflux-latest assets/* \
+            --target "${{ github.sha }}" --prerelease \
+            --title "GFLUX (latest build)" \
+            --notes "Download **GFLUX-Windows.exe**, double-click it, and GFLUX opens in your browser. It offers to install KiCad if you don't have it.
+
+          Windows may show \"Windows protected your PC\" because the app isn't code-signed: click **More info → Run anyway**.
+          macOS: right-click → Open the first time. Built from ${{ github.ref_name }} @ ${{ github.sha }}."
