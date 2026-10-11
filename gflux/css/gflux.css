@@ -165,9 +165,9 @@ svg { overflow: visible; }
 body.sim-running .autowire, body.sim-running .pin { pointer-events: none; }
 body.sim-running .part { cursor: pointer; }
 
-.part { cursor: grab; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.22)); }
+/* No CSS filters on the canvas: with many parts they ran Chrome out of graphics memory and the page flashed. */
+.part { cursor: grab; }
 .part:active { cursor: grabbing; }
-.part.selected { filter: drop-shadow(0 0 1.5px var(--accent)) drop-shadow(0 5px 8px rgba(0, 0, 0, 0.3)); }
 .gx-silk { font-family: var(--font-mono); font-weight: 600; pointer-events: none; }
 .gx-blink { animation: blink 1.6s steps(2, start) infinite; }
 @keyframes blink { to { opacity: 0.25; } }
@@ -209,7 +209,7 @@ body.sim-running .part { cursor: pointer; }
 .wire.selected .w-glow { opacity: 0.4; }
 .wire:hover .w-glow { opacity: 0.18; }
 .flow { fill: none; pointer-events: none; }
-.pulse { pointer-events: none; }
+.pulse { fill: none; pointer-events: none; stroke-linejoin: round; }
 #canvas.wiring #L-flow { opacity: 0.3; }
 
 /* Pins */

@@ -365,18 +365,21 @@
 
   const pathLen = (pts) => pts.reduce((n, p, i) => (i ? n + Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y) * G : 0), 0);
 
-  /** Glowing white pulses (radial gradient) travelling the way current flows. */
+  /** Soft white pulses travelling the way current flows. They are dashes on
+   *  the wire's own path (narrower than the wire), so they stay inside it with
+   *  no masks or filters: those made Chrome flash the whole page on big circuits. */
   function pulseMarkup(d, len, kind, cap) {
-    const spacing = Math.max(40, anim.gap * 6), rad = anim.size * 7;
-    const dur = Math.max(0.4, len / (FLOW_SPEED[kind] * anim.speed));
-    const n = Math.min(cap, Math.max(1, Math.round(len / spacing)));
-    let s = '';
-    for (let i = 0; i < n; i++) {
-      const begin = (-dur * i / n).toFixed(3);
-      s += `<circle class="pulse" r="${rad}" fill="url(#gx-pulse)">` +
-        `<animateMotion dur="${dur.toFixed(3)}s" begin="${begin}s" repeatCount="indefinite" path="${d}"/></circle>`;
-    }
-    return s;
+    const rad = anim.size * 7;
+    const n = Math.min(cap, Math.max(1, Math.round(len / Math.max(40, anim.gap * 6))));
+    const period = Math.max(len / n, rad * 3);
+    const dur = (period / (FLOW_SPEED[kind] * anim.speed)).toFixed(3);
+    // Layers from wide and faint to narrow and bright, centred on the same spot.
+    return [[rad * 2, 5.4, 0.16], [rad * 1.3, 4, 0.22], [rad * 0.7, 2.6, 0.38]].map(([dash, width, op]) => {
+      const lead = (rad * 2 - dash) / 2;
+      return `<path class="pulse" d="${d}" stroke="#fff" stroke-opacity="${op}" stroke-width="${width}" stroke-linecap="round" ` +
+        `stroke-dasharray="${dash.toFixed(1)} ${(period - dash).toFixed(1)}">` +
+        `<animate attributeName="stroke-dashoffset" from="${(-lead).toFixed(1)}" to="${(-lead - period).toFixed(1)}" dur="${dur}s" repeatCount="indefinite"/></path>`;
+    }).join('');
   }
 
   /** Moving particles along a wire, pointing the way current flows. Uses SMIL
@@ -427,10 +430,7 @@
     if (layerHtml.flowSig === sig) return;
     layerHtml.flowSig = sig;
     const cap = Math.max(1, Math.min(14, Math.floor(PULSE_BUDGET / Math.max(1, items.length))));
-    // The glow only shows inside its wire: masked by the wire's own stroke.
-    layerHtml.flow = L.flow.innerHTML = items.map((f) => `<mask id="fm-${f.id}" maskUnits="userSpaceOnUse" x="-100000" y="-100000" width="200000" height="200000">` +
-      `<path d="${f.d}" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></mask>` +
-      `<g mask="url(#fm-${f.id})">${flowMarkup(pathD(f.fp), f.kind, f.fp, cap)}</g>`).join('');
+    layerHtml.flow = L.flow.innerHTML = items.map((f) => flowMarkup(pathD(f.fp), f.kind, f.fp, cap)).join('');
   }
 
   /** Pan / zoom only: move the world, leave every layer (and its animations) alone. */
@@ -1838,8 +1838,7 @@
     // Reveal the UI only once the stylesheet is really there (see index.html).
     if (getComputedStyle(document.documentElement).getPropertyValue('--gx-css').trim() !== '1') return;
     document.documentElement.classList.add('gx-ready');
-    $('#defs').innerHTML = GFLUX.art.DEFS + $('#defs').innerHTML +
-      '<radialGradient id="gx-pulse"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".35" stop-color="#fff" stop-opacity=".32"/><stop offset=".7" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>';
+    $('#defs').innerHTML = GFLUX.art.DEFS + $('#defs').innerHTML;
     bindUI();
     let saved = null;
     try { saved = JSON.parse(store.get('gflux.autosave') || 'null'); } catch (e) { saved = null; }
